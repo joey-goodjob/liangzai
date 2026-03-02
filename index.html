@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 模特工作室</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <header class="header">
+        <div class="logo">
+            <span class="logo-icon">✨</span>
+            <span class="logo-text">AI 模特工作室</span>
+        </div>
+        <div class="status-bar">
+            <span class="status-item" id="modelStatus">
+                <span class="status-dot"></span>
+                模特: 未选定
+            </span>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="main-container">
+        
+        <!-- ========== 第一步：定模特 ========== -->
+        <section class="step-section" id="step1">
+            <div class="step-header">
+                <span class="step-number">01</span>
+                <h2>定模特</h2>
+                <p class="step-desc">描述你想要的模特形象，或上传参考图</p>
+            </div>
+            
+            <div class="step-content">
+                <!-- 左侧：输入区 -->
+                <div class="input-area">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="text">文字描述</button>
+                        <button class="tab-btn" data-tab="image">上传参考图</button>
+                    </div>
+                    
+                    <!-- 文字描述Tab -->
+                    <div class="tab-content active" id="textTab">
+                        <!-- 预设模板标签 -->
+                        <div class="template-tags">
+                            <span class="template-label">快捷模板：</span>
+                            <div class="template-list" id="templateList">
+                                <!-- 模板按钮将由 JS 动态生成 -->
+                            </div>
+                        </div>
+                        <textarea id="modelDescription" placeholder="例如：25岁亚洲女性，长发，身材高挑，气质优雅，微笑，穿着白色连衣裙..."></textarea>
+                    </div>
+                    
+                    <!-- 参考图Tab -->
+                    <div class="tab-content" id="imageTab">
+                        <div class="upload-box" id="refImageUpload">
+                            <input type="file" id="refImageInput" accept="image/*" hidden>
+                            <div class="upload-placeholder">
+                                <span class="upload-icon">📷</span>
+                                <p>点击或拖拽上传参考图</p>
+                            </div>
+                            <img id="refImagePreview" class="preview-image" style="display:none;">
+                        </div>
+                    </div>
+                    
+                    <button class="btn-primary btn-generate" id="generateModelBtn">
+                        <span class="btn-icon">🎨</span>
+                        生成候选模特
+                    </button>
+                </div>
+                
+                <!-- 右侧：候选模特展示区 -->
+                <div class="result-area">
+                    <h3>候选模特</h3>
+                    <div class="candidate-grid" id="candidateGrid">
+                        <div class="empty-state">
+                            <span class="empty-icon">👤</span>
+                            <p>等待生成模特...</p>
+                        </div>
+                    </div>
+                    <div class="selected-model" id="selectedModel" style="display:none;">
+                        <h4>已选定的模特</h4>
+                        <div class="selected-model-card"></div>
+                        <button class="btn-secondary" id="changeModelBtn">更换模特</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== 第二步：批量融图 ========== -->
+        <section class="step-section" id="step2">
+            <div class="step-header">
+                <span class="step-number">02</span>
+                <h2>批量融图</h2>
+                <p class="step-desc">上传环境图，AI将把模特自然合成到每张图中</p>
+            </div>
+            
+            <div class="step-content">
+                <!-- 上传环境图区域 -->
+                <div class="upload-area">
+                    <div class="batch-upload-box" id="envImagesUpload">
+                        <input type="file" id="envImagesInput" accept="image/*" multiple hidden>
+                        <div class="upload-placeholder">
+                            <span class="upload-icon">🖼️</span>
+                            <p>点击或拖拽上传环境图</p>
+                            <p class="upload-hint">支持多选，可一次上传多张图片</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 已上传的环境图列表 -->
+                    <div class="env-images-list" id="envImagesList"></div>
+                </div>
+                
+                <!-- 融图设置 -->
+                <div class="merge-settings">
+                    <h3>融图设置</h3>
+                    <div class="setting-row">
+                        <label>合成位置偏好</label>
+                        <select id="positionPreference">
+                            <option value="auto">自动选择最佳位置</option>
+                            <option value="center">居中</option>
+                            <option value="left">靠左</option>
+                            <option value="right">靠右</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <label>模特大小</label>
+                        <select id="sizePreference">
+                            <option value="auto">自动适配</option>
+                            <option value="small">小 (适合远景)</option>
+                            <option value="medium">中 (适合中景)</option>
+                            <option value="large">大 (适合近景)</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary btn-merge" id="startMergeBtn" disabled>
+                        <span class="btn-icon">🔄</span>
+                        开始批量融图
+                    </button>
+                </div>
+                
+                <!-- 输出结果区 -->
+                <div class="output-area">
+                    <h3>输出结果</h3>
+                    <div class="output-grid" id="outputGrid">
+                        <div class="empty-state">
+                            <span class="empty-icon">🖼️</span>
+                            <p>等待融图...</p>
+                        </div>
+                    </div>
+                    <div class="output-actions" id="outputActions" style="display:none;">
+                        <button class="btn-secondary" id="downloadAllBtn">
+                            <span>📥</span> 全部下载
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 加载遮罩 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p id="loadingText">处理中...</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 图片预览模态框（Lightbox） -->
+    <div class="lightbox" id="lightbox">
+        <button class="lightbox-close" id="lightboxClose">×</button>
+        <button class="lightbox-prev" id="lightboxPrev">‹</button>
+        <button class="lightbox-next" id="lightboxNext">›</button>
+        <div class="lightbox-content">
+            <img id="lightboxImage" src="" alt="预览图片">
+        </div>
+        <div class="lightbox-footer">
+            <span id="lightboxCounter">1 / 4</span>
+            <button class="btn-select-model" id="lightboxSelect">选定此模特</button>
+        </div>
+    </div>
+
+    <script src="api-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

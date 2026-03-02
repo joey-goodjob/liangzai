@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>火山引擎API测试</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 40px;
+            min-height: 100vh;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 30px; color: #6366f1; }
+        .card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card h2 { margin-bottom: 16px; color: #8b5cf6; font-size: 18px; }
+        textarea {
+            width: 100%;
+            height: 120px;
+            background: #0f0f23;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 12px;
+            color: #fff;
+            font-size: 14px;
+            resize: vertical;
+        }
+        textarea:focus { outline: none; border-color: #6366f1; }
+        button {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 16px;
+            width: 100%;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .result { margin-top: 20px; }
+        .result img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .log {
+            background: #0f0f23;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log .error { color: #ef4444; }
+        .log .success { color: #10b981; }
+        .log .info { color: #6366f1; }
+        .log .warn { color: #f59e0b; }
+        .images-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .images-grid img { width: 100%; border-radius: 8px; }
+        .config-info {
+            background: #0f0f23;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .config-info code { color: #f59e0b; }
+        .success-box {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        .success-box h3 { color: #10b981; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 火山引擎 API 测试</h1>
+        
+        <!-- 配置信息 -->
+        <div class="card">
+            <h2>📋 当前配置</h2>
+            <div class="config-info">
+                <p>API端点: <code>https://ark.cn-beijing.volces.com/api/v3/images/generations</code></p>
+                <p>API Key: <code>19d0b662-ba7b-4565-99c2-7cec9e3e5f74</code></p>
+                <p>模型: <code>doubao-seedream-5-0-260128</code></p>
+                <p>尺寸: <code>2K</code> | 水印: <code>false</code> | 格式: <code>png</code></p>
+            </div>
+        </div>
+
+        <!-- 测试：文生图 -->
+        <div class="card">
+            <h2>🎨 测试：文生图（Text to Image）</h2>
+            <textarea id="prompt1">充满活力的特写编辑肖像，模特眼神犀利，头戴雕塑感帽子，色彩拼接丰富，眼部焦点锐利，景深较浅，具有Vogue杂志封面的美学风格，采用中画幅拍摄，工作室灯光效果强烈。</textarea>
+            <button id="testBtn1" onclick="testTextToImage()">🚀 开始生成</button>
+            <div class="result" id="result1"></div>
+        </div>
+
+        <!-- 日志区域 -->
+        <div class="card">
+            <h2>📝 请求日志</h2>
+            <div class="log" id="logArea">等待测试...</div>
+        </div>
+    </div>
+
+    <script>
+        // ========== 配置 ==========
+        const API_CONFIG = {
+            endpoint: 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+            apiKey: '19d0b662-ba7b-4565-99c2-7cec9e3e5f74',
+            model: 'doubao-seedream-5-0-260128'
+        };
+
+        // ========== 日志函数 ==========
+        function log(message, type = 'info') {
+            const logArea = document.getElementById('logArea');
+            const time = new Date().toLocaleTimeString();
+            const coloredMsg = `<span class="${type}">[${time}] ${message}</span>`;
+            logArea.innerHTML = coloredMsg + '\n' + logArea.innerHTML;
+            console.log(`[${type}]`, message);
+        }
+
+        // ========== 测试：文生图 ==========
+        async function testTextToImage() {
+            const btn = document.getElementById('testBtn1');
+            const resultDiv = document.getElementById('result1');
+            const prompt = document.getElementById('prompt1').value || '一只可爱的猫';
+
+            btn.disabled = true;
+            btn.textContent = '⏳ 生成中...';
+            resultDiv.innerHTML = '<p style="color:#888">正在调用API，请稍候...</p>';
+
+            log('========== 开始测试 ==========', 'info');
+            log(`提示词: ${prompt.substring(0, 50)}...`, 'info');
+
+            // 构建请求体 - 完全按照官方示例
+            const requestBody = {
+                model: API_CONFIG.model,
+                prompt: prompt,
+                size: '2K',           // 使用分辨率字符串
+                output_format: 'png',
+                watermark: false
+            };
+
+            log('请求体:', 'info');
+            log(JSON.stringify(requestBody, null, 2), 'info');
+
+            try {
+                log('发送请求...', 'info');
+                
+                const response = await fetch(API_CONFIG.endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_CONFIG.apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                log(`HTTP状态: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+
+                const responseText = await response.text();
+                
+                if (!response.ok) {
+                    log('错误响应:', 'error');
+                    log(responseText, 'error');
+                    throw new Error(`HTTP ${response.status}: ${responseText}`);
+                }
+
+                const data = JSON.parse(responseText);
+                log('API调用成功!', 'success');
+                log(`模型: ${data.model}`, 'success');
+                log(`生成图片数: ${data.usage?.generated_images || 1}`, 'success');
+
+                if (data.data && data.data.length > 0) {
+                    const img = data.data[0];
+                    log(`图片尺寸: ${img.size}`, 'info');
+                    log(`图片URL: ${img.url.substring(0, 60)}...`, 'info');
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success-box">
+                            <h3>✅ 生成成功!</h3>
+                            <p>尺寸: ${img.size}</p>
+                            <p>模型: ${data.model}</p>
+                        </div>
+                        <div style="margin-top:16px;">
+                            <img src="${img.url}" alt="生成的图片" style="border-radius:8px;">
+                        </div>
+                        <p style="margin-top:12px;font-size:12px;color:#888;">
+                            图片URL（24小时内有效）:<br>
+                            <code style="word-break:break-all;">${img.url}</code>
+                        </p>
+                    `;
+                } else {
+                    throw new Error('返回数据中没有图片');
+                }
+
+            } catch (error) {
+                log(`错误: ${error.message}`, 'error');
+                resultDiv.innerHTML = `
+                    <div style="color:#ef4444;padding:16px;background:rgba(239,68,68,0.1);border-radius:8px;">
+                        <p>❌ 请求失败</p>
+                        <p style="font-size:12px;margin-top:8px;word-break:break-all;">${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 开始生成';
+            }
+        }
+
+        // 页面加载完成
+        log('页面加载完成', 'success');
+        log('点击「开始生成」按钮测试API', 'info');
+    </script>
+</body>
+</html>
