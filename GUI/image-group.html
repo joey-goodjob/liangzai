@@ -1,389 +1,540 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI 组图生成工具</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css" />
     <style>
-        /* 组图工具专用样式 */
-        .config-section {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius-lg);
-            padding: 24px;
-            margin-bottom: 24px;
-        }
-        
-        .config-section h3 {
-            font-size: 16px;
-            color: var(--text-secondary);
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .config-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-        }
-        
-        .config-item {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        
-        .config-item label {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-        
-        .config-item input,
-        .config-item select {
-            padding: 12px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 14px;
-        }
-        
-        .config-item input:focus,
-        .config-item select:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-        }
-        
-        .config-item input::placeholder {
-            color: var(--text-muted);
-        }
-        
-        /* 左右布局区域 */
+      /* 组图工具专用样式 */
+      .config-section {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-lg);
+        padding: 24px;
+        margin-bottom: 24px;
+      }
+
+      .config-section h3 {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+
+      .config-item {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .config-item label {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+
+      .config-item input,
+      .config-item select {
+        padding: 12px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 14px;
+      }
+
+      .config-item input:focus,
+      .config-item select:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+      }
+
+      .config-item input::placeholder {
+        color: var(--text-muted);
+      }
+
+      /* 左右布局区域 */
+      .input-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+
+      .input-left,
+      .input-right {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-lg);
+        padding: 24px;
+      }
+
+      .input-left {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .input-right h3 {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+      }
+
+      .input-right h3 span {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-left: 8px;
+      }
+
+      .prompt-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .prompt-header h3 {
+        font-size: 16px;
+        color: var(--text-secondary);
+      }
+
+      .char-count {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .prompt-textarea {
+        width: 100%;
+        flex: 1;
+        min-height: 150px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: 16px;
+        color: var(--text-primary);
+        font-size: 14px;
+        resize: none;
+        line-height: 1.6;
+      }
+
+      .prompt-textarea:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+      }
+
+      .input-left .batch-upload-box {
+        padding: 20px;
+      }
+
+      .input-left .upload-placeholder p {
+        font-size: 12px;
+      }
+
+      .input-left .upload-icon {
+        font-size: 32px;
+      }
+
+      .ref-images-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .ref-image-item {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+      }
+
+      .ref-image-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .ref-image-item .remove-btn {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 22px;
+        height: 22px;
+        background: var(--error);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: var(--transition);
+      }
+
+      .ref-image-item:hover .remove-btn {
+        opacity: 1;
+      }
+
+      .result-section {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-lg);
+        padding: 24px;
+      }
+
+      .result-section h3 {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+      }
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+        min-height: 150px;
+      }
+
+      .result-card {
+        position: relative;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        overflow: hidden;
+      }
+
+      .result-card img {
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: cover;
+      }
+
+      .result-card .overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          to top,
+          rgba(0, 0, 0, 0.8),
+          transparent 50%
+        );
+        opacity: 0;
+        transition: var(--transition);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 12px;
+        pointer-events: none;
+      }
+
+      .result-card:hover .overlay {
+        opacity: 1;
+      }
+
+      .result-card .download-btn {
+        background: var(--accent-primary);
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        color: white;
+        font-size: 12px;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+
+      .result-actions {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+      }
+
+      .status-text {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-top: 8px;
+      }
+
+      .api-key-input {
+        font-family: monospace;
+      }
+
+      /* 响应式：小屏幕时变回上下布局 */
+      @media (max-width: 900px) {
         .input-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
-            margin-bottom: 24px;
+          grid-template-columns: 1fr;
         }
-        
-        .input-left, .input-right {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius-lg);
-            padding: 24px;
-        }
-        
-        .input-left {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .input-right h3 {
-            font-size: 16px;
-            color: var(--text-secondary);
-            margin-bottom: 16px;
-        }
-        
-        .input-right h3 span {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-left: 8px;
-        }
-        
-        .prompt-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        
-        .prompt-header h3 {
-            font-size: 16px;
-            color: var(--text-secondary);
-        }
-        
-        .char-count {
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-        
+
         .prompt-textarea {
-            width: 100%;
-            flex: 1;
-            min-height: 150px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: 16px;
-            color: var(--text-primary);
-            font-size: 14px;
-            resize: none;
-            line-height: 1.6;
+          min-height: 120px;
         }
-        
-        .prompt-textarea:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-        }
-        
-        .input-left .batch-upload-box {
-            padding: 20px;
-        }
-        
-        .input-left .upload-placeholder p {
-            font-size: 12px;
-        }
-        
-        .input-left .upload-icon {
-            font-size: 32px;
-        }
-        
-        .ref-images-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-top: 16px;
-        }
-        
-        .ref-image-item {
-            position: relative;
-            width: 100px;
-            height: 100px;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-        }
-        
-        .ref-image-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .ref-image-item .remove-btn {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            width: 22px;
-            height: 22px;
-            background: var(--error);
-            border: none;
-            border-radius: 50%;
-            color: white;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: var(--transition);
-        }
-        
-        .ref-image-item:hover .remove-btn {
-            opacity: 1;
-        }
-        
-        .result-section {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius-lg);
-            padding: 24px;
-        }
-        
-        .result-section h3 {
-            font-size: 16px;
-            color: var(--text-secondary);
-            margin-bottom: 16px;
-        }
-        
-        .result-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 16px;
-            min-height: 150px;
-        }
-        
-        .result-card {
-            position: relative;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            overflow: hidden;
-        }
-        
-        .result-card img {
-            width: 100%;
-            aspect-ratio: 1;
-            object-fit: cover;
-        }
-        
-        .result-card .overlay {
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent 50%);
-            opacity: 0;
-            transition: var(--transition);
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            padding: 12px;
-            pointer-events: none;
-        }
-        
-        .result-card:hover .overlay {
-            opacity: 1;
-        }
-        
-        .result-card .download-btn {
-            background: var(--accent-primary);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            color: white;
-            font-size: 12px;
-            cursor: pointer;
-            pointer-events: auto;
-        }
-        
-        .result-actions {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-        }
-        
-        .status-text {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin-top: 8px;
-        }
-        
-        .api-key-input {
-            font-family: monospace;
-        }
-        
-        /* 响应式：小屏幕时变回上下布局 */
-        @media (max-width: 900px) {
-            .input-section {
-                grid-template-columns: 1fr;
-            }
-            
-            .prompt-textarea {
-                min-height: 120px;
-            }
-        }
+      }
+
+      /* 人物图和场景图上传区域样式 */
+      .upload-section {
+        margin-bottom: 16px;
+      }
+
+      .upload-section:last-child {
+        margin-bottom: 0;
+      }
+
+      .upload-section h4 {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 10px;
+      }
+
+      .upload-section h4 span {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-left: 6px;
+      }
+
+      .character-upload-box,
+      .scene-upload-box {
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .preview-container {
+        position: relative;
+        width: 100%;
+        height: 120px;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .preview-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .preview-container .remove-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 26px;
+        height: 26px;
+        background: var(--error);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.9;
+        transition: var(--transition);
+      }
+
+      .preview-container .remove-btn:hover {
+        opacity: 1;
+        transform: scale(1.1);
+      }
+
+      .character-upload-box .upload-placeholder,
+      .scene-upload-box .upload-placeholder {
+        text-align: center;
+      }
+
+      .character-upload-box .upload-icon,
+      .scene-upload-box .upload-icon {
+        font-size: 28px;
+      }
+
+      .character-upload-box .upload-placeholder p,
+      .scene-upload-box .upload-placeholder p {
+        font-size: 12px;
+        margin: 4px 0;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <!-- 顶部导航 -->
     <header class="header">
-        <div class="logo">
-            <span class="logo-icon">🎨</span>
-            <span class="logo-text">AI 组图生成工具</span>
-        </div>
-        <div class="status-bar">
-            <span class="status-item" id="statusText">
-                <span class="status-dot" id="statusDot"></span>
-                准备就绪
-            </span>
-        </div>
+      <div class="logo">
+        <span class="logo-icon">🎨</span>
+        <span class="logo-text">AI 组图生成工具</span>
+      </div>
+      <div class="status-bar">
+        <span class="status-item" id="statusText">
+          <span class="status-dot" id="statusDot"></span>
+          准备就绪
+        </span>
+      </div>
     </header>
 
     <!-- 主要内容区 -->
     <main class="main-container">
-        
-        <!-- ========== 配置区域 ========== -->
-        <section class="config-section">
-            <h3>API 配置</h3>
-            <div class="config-grid">
-                <div class="config-item">
-                    <label>模型选择</label>
-                    <select id="modelSelect">
-                        <option value="doubao-seedream-4-5-251128">Seedream 4.5</option>
-                        <option value="doubao-seedream-5-0-260128">Seedream 5.0</option>
-                    </select>
-                </div>
-                <div class="config-item">
-                    <label>API Key</label>
-                    <input type="text" id="apiKeyInput" class="api-key-input" placeholder="输入您的 API Key" value="19d0b662-ba7b-4565-99c2-7cec9e3e5f74">
-                </div>
-                <div class="config-item">
-                    <label>生成数量 (1-15)</label>
-                    <input type="number" id="numImagesInput" min="1" max="15" value="4">
-                </div>
-                <div class="config-item">
-                    <label>图片尺寸</label>
-                    <select id="sizeSelect">
-                        <option value="2K">2K (2048x2048)</option>
-                        <option value="4K">4K (4096x4096)</option>
-                    </select>
-                </div>
-            </div>
-        </section>
+      <!-- ========== 配置区域 ========== -->
+      <section class="config-section">
+        <h3>API 配置</h3>
+        <div class="config-grid">
+          <div class="config-item">
+            <label>模型选择</label>
+            <select id="modelSelect">
+              <option value="doubao-seedream-4-5-251128">Seedream 4.5</option>
+              <option value="doubao-seedream-5-0-260128">Seedream 5.0</option>
+            </select>
+          </div>
+          <div class="config-item">
+            <label>API Key</label>
+            <input
+              type="text"
+              id="apiKeyInput"
+              class="api-key-input"
+              placeholder="输入您的 API Key（必填）"
+            />
+          </div>
+          <div class="config-item">
+            <label>生成数量 (1-15)</label>
+            <input
+              type="number"
+              id="numImagesInput"
+              min="1"
+              max="15"
+              value="4"
+            />
+          </div>
+          <div class="config-item">
+            <label>图片尺寸</label>
+            <select id="sizeSelect">
+              <option value="2K">2K (2048x2048)</option>
+              <option value="4K">4K (4096x4096)</option>
+            </select>
+          </div>
+        </div>
+      </section>
 
-        <!-- ========== 提示词和参考图片区域（左右布局） ========== -->
-        <section class="input-section">
-            <!-- 左侧：提示词 -->
-            <div class="input-left">
-                <div class="prompt-header">
-                    <h3>提示词 (Prompt)</h3>
-                    <span class="char-count" id="charCount">0 字</span>
-                </div>
-                <textarea class="prompt-textarea" id="promptInput" placeholder="输入提示词，描述您想要生成的组图内容...&#10;&#10;例如：生成一组共4张连贯插画，核心为同一庭院一角的四季变迁，以统一风格展现四季独特色彩、元素与氛围"></textarea>
-                <p class="status-text">建议不超过300个汉字或600个英文单词</p>
-            </div>
-            
-            <!-- 右侧：参考图片 -->
-            <div class="input-right">
-                <h3>参考图片 <span>(可选，最多14张)</span></h3>
-                <div class="batch-upload-box" id="refImageUpload">
-                    <input type="file" id="refImageInput" accept="image/*" multiple hidden>
-                    <div class="upload-placeholder">
-                        <span class="upload-icon">📷</span>
-                        <p>点击或拖拽上传</p>
-                        <p class="upload-hint">支持 jpg/png/webp</p>
-                    </div>
-                </div>
-                <div class="ref-images-grid" id="refImagesGrid"></div>
-            </div>
-        </section>
+      <!-- ========== 提示词和参考图片区域（左右布局） ========== -->
+      <section class="input-section">
+        <!-- 左侧：姿势描述 -->
+        <div class="input-left">
+          <div class="prompt-header">
+            <h3>描述</h3>
+            <span class="char-count" id="charCount">0 字</span>
+          </div>
+          <textarea
+            class="prompt-textarea"
+            id="promptInput"
+            placeholder="描述你想要生成的内容...&#10;&#10;例如：&#10;- 有场景图时：人物站立、坐姿、行走等姿势&#10;- 只有场景图时：一个穿白裙的女生站在海边&#10;- 纯文字时：一组四季变化的庭院插画"
+          ></textarea>
+          <p class="status-text">
+            上传场景图可锁定场景不变，上传人物图可保持人物特征
+          </p>
+        </div>
 
-        <!-- ========== 生成按钮 ========== -->
-        <button class="btn-primary btn-generate" id="generateBtn">
-            <span class="btn-icon">🎨</span>
-            生成组图
-        </button>
-
-        <!-- ========== 结果区域 ========== -->
-        <section class="result-section" style="margin-top: 24px;">
-            <h3>生成结果</h3>
-            <div class="result-grid" id="resultGrid">
-                <div class="empty-state">
-                    <span class="empty-icon">🖼️</span>
-                    <p>等待生成...</p>
-                </div>
-            </div>
-            <div class="result-actions" id="resultActions" style="display: none;">
-                <button class="btn-secondary" id="downloadAllBtn">
-                    <span>📥</span> 一键下载全部
+        <!-- 右侧：图片上传 -->
+        <div class="input-right">
+          <!-- 人物图区域 -->
+          <div class="upload-section">
+            <h4>人物图 <span>(可选，1张)</span></h4>
+            <div
+              class="batch-upload-box character-upload-box"
+              id="characterUpload"
+            >
+              <input
+                type="file"
+                id="characterImageInput"
+                accept="image/*"
+                hidden
+              />
+              <div class="upload-placeholder" id="characterPlaceholder">
+                <span class="upload-icon">👤</span>
+                <p>点击或拖拽上传人物图</p>
+                <p class="upload-hint">支持 jpg/png/webp</p>
+              </div>
+              <div
+                class="preview-container"
+                id="characterPreview"
+                style="display: none"
+              >
+                <img id="characterPreviewImg" src="" alt="人物图预览" />
+                <button
+                  class="remove-btn"
+                  id="removeCharacterBtn"
+                  type="button"
+                >
+                  ×
                 </button>
+              </div>
             </div>
-        </section>
+          </div>
+
+          <!-- 场景图区域 -->
+          <div class="upload-section">
+            <h4>场景图 <span>(可选，1张)</span></h4>
+            <div class="batch-upload-box scene-upload-box" id="sceneUpload">
+              <input type="file" id="sceneImageInput" accept="image/*" hidden />
+              <div class="upload-placeholder" id="scenePlaceholder">
+                <span class="upload-icon">🏞️</span>
+                <p>点击或拖拽上传场景图</p>
+                <p class="upload-hint">支持 jpg/png/webp</p>
+              </div>
+              <div
+                class="preview-container"
+                id="scenePreview"
+                style="display: none"
+              >
+                <img id="scenePreviewImg" src="" alt="场景图预览" />
+                <button class="remove-btn" id="removeSceneBtn" type="button">
+                  ×
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 生成按钮 ========== -->
+      <button class="btn-primary btn-generate" id="generateBtn">
+        <span class="btn-icon">🎨</span>
+        生成组图
+      </button>
+
+      <!-- ========== 结果区域 ========== -->
+      <section class="result-section" style="margin-top: 24px">
+        <h3>生成结果</h3>
+        <div class="result-grid" id="resultGrid">
+          <div class="empty-state">
+            <span class="empty-icon">🖼️</span>
+            <p>等待生成...</p>
+          </div>
+        </div>
+        <div class="result-actions" id="resultActions" style="display: none">
+          <button class="btn-secondary" id="downloadAllBtn">
+            <span>📥</span> 一键下载全部
+          </button>
+        </div>
+      </section>
     </main>
 
     <!-- 加载遮罩 -->
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <p id="loadingText">生成中...</p>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <p id="loadingText">生成中...</p>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
         </div>
+      </div>
     </div>
 
     <!-- Toast 提示 -->
@@ -391,18 +542,18 @@
 
     <!-- 图片预览模态框（Lightbox） -->
     <div class="lightbox" id="lightbox">
-        <button class="lightbox-close" id="lightboxClose">×</button>
-        <button class="lightbox-prev" id="lightboxPrev">‹</button>
-        <button class="lightbox-next" id="lightboxNext">›</button>
-        <div class="lightbox-content">
-            <img id="lightboxImage" src="" alt="预览图片">
-        </div>
-        <div class="lightbox-footer">
-            <span id="lightboxCounter">1 / 4</span>
-            <button class="btn-select-model" id="lightboxDownload">下载此图</button>
-        </div>
+      <button class="lightbox-close" id="lightboxClose">×</button>
+      <button class="lightbox-prev" id="lightboxPrev">‹</button>
+      <button class="lightbox-next" id="lightboxNext">›</button>
+      <div class="lightbox-content">
+        <img id="lightboxImage" src="" alt="预览图片" />
+      </div>
+      <div class="lightbox-footer">
+        <span id="lightboxCounter">1 / 4</span>
+        <button class="btn-select-model" id="lightboxDownload">下载此图</button>
+      </div>
     </div>
 
     <script src="image-group.js"></script>
-</body>
+  </body>
 </html>

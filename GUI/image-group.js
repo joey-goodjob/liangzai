@@ -6,10 +6,20 @@
 
 // ========== 全局状态 ==========
 const AppState = {
-  refImages: [], // 参考图片列表 (base64)
+  characterImage: null, // 人物图 (单张 base64)
+  sceneImage: null, // 场景图 (单张 base64)
   results: [], // 生成结果
   isGenerating: false, // 是否正在生成
   lightboxIndex: 0, // Lightbox 当前显示的图片索引
+};
+
+// ========== 场景锁定提示词配置 ==========
+const PROMPT_CONFIG = {
+  // 场景锁定指令
+  sceneLock: `重要：场景背景必须完全保持不变，包括环境、光线、构图、透视。
+将人物图片中的模特自然融入到场景中。
+人物可以改变姿势、表情、视角角度，但场景绝对不能改变。
+确保人物与场景的光影一致，透视正确，风格协调，照片级真实感。`,
 };
 
 // ========== DOM 元素引用 ==========
@@ -24,10 +34,21 @@ const DOM = {
   promptInput: document.getElementById("promptInput"),
   charCount: document.getElementById("charCount"),
 
-  // 参考图
-  refImageUpload: document.getElementById("refImageUpload"),
-  refImageInput: document.getElementById("refImageInput"),
-  refImagesGrid: document.getElementById("refImagesGrid"),
+  // 人物图
+  characterUpload: document.getElementById("characterUpload"),
+  characterImageInput: document.getElementById("characterImageInput"),
+  characterPlaceholder: document.getElementById("characterPlaceholder"),
+  characterPreview: document.getElementById("characterPreview"),
+  characterPreviewImg: document.getElementById("characterPreviewImg"),
+  removeCharacterBtn: document.getElementById("removeCharacterBtn"),
+
+  // 场景图
+  sceneUpload: document.getElementById("sceneUpload"),
+  sceneImageInput: document.getElementById("sceneImageInput"),
+  scenePlaceholder: document.getElementById("scenePlaceholder"),
+  scenePreview: document.getElementById("scenePreview"),
+  scenePreviewImg: document.getElementById("scenePreviewImg"),
+  removeSceneBtn: document.getElementById("removeSceneBtn"),
 
   // 生成
   generateBtn: document.getElementById("generateBtn"),
@@ -176,92 +197,142 @@ DOM.promptInput.addEventListener("input", () => {
   DOM.charCount.textContent = `${length} 字`;
 });
 
-// ========== 参考图片上传 ==========
+// ========== 人物图上传 ==========
 
 // 点击上传
-DOM.refImageUpload.addEventListener("click", () => {
-  DOM.refImageInput.click();
+DOM.characterUpload.addEventListener("click", (e) => {
+  // 如果点击的是删除按钮，不触发上传
+  if (e.target.classList.contains("remove-btn")) return;
+  DOM.characterImageInput.click();
 });
 
 // 拖拽上传
-DOM.refImageUpload.addEventListener("dragover", (e) => {
+DOM.characterUpload.addEventListener("dragover", (e) => {
   e.preventDefault();
-  DOM.refImageUpload.classList.add("dragover");
+  DOM.characterUpload.classList.add("dragover");
 });
 
-DOM.refImageUpload.addEventListener("dragleave", () => {
-  DOM.refImageUpload.classList.remove("dragover");
+DOM.characterUpload.addEventListener("dragleave", () => {
+  DOM.characterUpload.classList.remove("dragover");
 });
 
-DOM.refImageUpload.addEventListener("drop", (e) => {
+DOM.characterUpload.addEventListener("drop", (e) => {
   e.preventDefault();
-  DOM.refImageUpload.classList.remove("dragover");
-  handleRefImages(e.dataTransfer.files);
+  DOM.characterUpload.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith("image/")) {
+    handleCharacterImage(file);
+  }
 });
 
 // 文件选择
-DOM.refImageInput.addEventListener("change", (e) => {
-  handleRefImages(e.target.files);
+DOM.characterImageInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    handleCharacterImage(file);
+  }
+});
+
+// 删除人物图
+DOM.removeCharacterBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  clearCharacterImage();
 });
 
 /**
- * 处理参考图片上传
+ * 处理人物图上传
  */
-async function handleRefImages(files) {
-  const maxImages = 14;
-  const currentCount = AppState.refImages.length;
-  const availableSlots = maxImages - currentCount;
+async function handleCharacterImage(file) {
+  const base64 = await fileToBase64(file);
+  AppState.characterImage = base64;
 
-  if (availableSlots <= 0) {
-    showToast("最多只能上传14张参考图片", "error");
-    return;
-  }
+  // 显示预览
+  DOM.characterPreviewImg.src = base64;
+  DOM.characterPreview.style.display = "block";
+  DOM.characterPlaceholder.style.display = "none";
 
-  const filesToProcess = Array.from(files).slice(0, availableSlots);
-
-  for (const file of filesToProcess) {
-    if (file.type.startsWith("image/")) {
-      const base64 = await fileToBase64(file);
-      AppState.refImages.push(base64);
-    }
-  }
-
-  renderRefImages();
-
-  if (files.length > availableSlots) {
-    showToast(`已添加 ${filesToProcess.length} 张图片，已达上限`, "info");
-  } else {
-    showToast(`已添加 ${filesToProcess.length} 张参考图片`, "success");
-  }
+  showToast("人物图已上传", "success");
 }
 
 /**
- * 渲染参考图片列表
+ * 清除人物图
  */
-function renderRefImages() {
-  if (AppState.refImages.length === 0) {
-    DOM.refImagesGrid.innerHTML = "";
-    return;
-  }
+function clearCharacterImage() {
+  AppState.characterImage = null;
+  DOM.characterPreviewImg.src = "";
+  DOM.characterPreview.style.display = "none";
+  DOM.characterPlaceholder.style.display = "block";
+  DOM.characterImageInput.value = "";
+  showToast("人物图已移除", "info");
+}
 
-  DOM.refImagesGrid.innerHTML = AppState.refImages
-    .map(
-      (img, index) => `
-        <div class="ref-image-item" data-index="${index}">
-            <img src="${img}" alt="参考图 ${index + 1}">
-            <button class="remove-btn" onclick="removeRefImage(${index})">×</button>
-        </div>
-    `,
-    )
-    .join("");
+// ========== 场景图上传 ==========
+
+// 点击上传
+DOM.sceneUpload.addEventListener("click", (e) => {
+  // 如果点击的是删除按钮，不触发上传
+  if (e.target.classList.contains("remove-btn")) return;
+  DOM.sceneImageInput.click();
+});
+
+// 拖拽上传
+DOM.sceneUpload.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  DOM.sceneUpload.classList.add("dragover");
+});
+
+DOM.sceneUpload.addEventListener("dragleave", () => {
+  DOM.sceneUpload.classList.remove("dragover");
+});
+
+DOM.sceneUpload.addEventListener("drop", (e) => {
+  e.preventDefault();
+  DOM.sceneUpload.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith("image/")) {
+    handleSceneImage(file);
+  }
+});
+
+// 文件选择
+DOM.sceneImageInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    handleSceneImage(file);
+  }
+});
+
+// 删除场景图
+DOM.removeSceneBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  clearSceneImage();
+});
+
+/**
+ * 处理场景图上传
+ */
+async function handleSceneImage(file) {
+  const base64 = await fileToBase64(file);
+  AppState.sceneImage = base64;
+
+  // 显示预览
+  DOM.scenePreviewImg.src = base64;
+  DOM.scenePreview.style.display = "block";
+  DOM.scenePlaceholder.style.display = "none";
+
+  showToast("场景图已上传", "success");
 }
 
 /**
- * 移除参考图片
+ * 清除场景图
  */
-function removeRefImage(index) {
-  AppState.refImages.splice(index, 1);
-  renderRefImages();
+function clearSceneImage() {
+  AppState.sceneImage = null;
+  DOM.scenePreviewImg.src = "";
+  DOM.scenePreview.style.display = "none";
+  DOM.scenePlaceholder.style.display = "block";
+  DOM.sceneImageInput.value = "";
+  showToast("场景图已移除", "info");
 }
 
 // ========== 生成组图 ==========
@@ -274,38 +345,33 @@ DOM.generateBtn.addEventListener("click", async () => {
   const size = DOM.sizeSelect.value;
   const prompt = DOM.promptInput.value.trim();
 
-  // 验证
+  // 验证 API Key
   if (!apiKey) {
     showToast("请输入 API Key", "error");
     return;
   }
 
-  if (!prompt) {
-    showToast("请输入提示词", "error");
+  // 检查是否至少有场景图或人物图
+  const hasCharacterImage = !!AppState.characterImage;
+  const hasSceneImage = !!AppState.sceneImage;
+  const hasPrompt = !!prompt;
+
+  // 如果什么都没有，提示用户
+  if (!hasCharacterImage && !hasSceneImage && !hasPrompt) {
+    showToast("请上传场景图或人物图，或输入姿势描述", "error");
     return;
   }
 
-  if (numImages < 1 || numImages > 15) {
-    showToast("生成数量必须在 1-15 之间", "error");
+  // 验证生成数量
+  const inputImageCount = (hasCharacterImage ? 1 : 0) + (hasSceneImage ? 1 : 0);
+  const maxImages = 15 - inputImageCount;
+  
+  if (numImages < 1 || numImages > maxImages) {
+    showToast(`生成数量必须在 1-${maxImages} 之间`, "error");
     return;
   }
 
-  // 检查参考图数量限制
-  // 输入的参考图数量 + 最终生成的图片数量 <= 15张
-  const maxGeneratable = 15 - AppState.refImages.length;
-  const actualNumImages = Math.min(numImages, maxGeneratable);
-
-  if (AppState.refImages.length > 0 && actualNumImages < numImages) {
-    showToast(
-      `已有 ${AppState.refImages.length} 张参考图，最多可生成 ${maxGeneratable} 张`,
-      "info",
-    );
-  }
-
-  if (actualNumImages <= 0) {
-    showToast("参考图已达上限，无法生成更多图片", "error");
-    return;
-  }
+  const actualNumImages = Math.min(numImages, maxImages);
 
   // 开始生成
   AppState.isGenerating = true;
@@ -325,23 +391,51 @@ DOM.generateBtn.addEventListener("click", async () => {
   `;
 
   try {
-    // 构建组图提示词（在用户提示词前加上组图引导）
-    let groupPrompt = prompt;
-    if (actualNumImages > 1) {
-      // 检查用户提示词是否已包含"组"或"张"等关键词
-      if (
-        !prompt.includes("组") &&
-        !prompt.includes("张") &&
-        !prompt.includes("系列")
-      ) {
-        groupPrompt = `生成一组共${actualNumImages}张连贯图片：${prompt}`;
+    // 根据上传的图片类型构建不同的提示词
+    let fullPrompt = "";
+
+    if (hasSceneImage && hasCharacterImage) {
+      // 有场景图 + 人物图：场景锁定，人物换姿势
+      fullPrompt = `${PROMPT_CONFIG.sceneLock}
+
+用户姿势要求：${prompt || "生成人物在不同姿势下的组图"}`;
+    } else if (hasSceneImage && !hasCharacterImage) {
+      // 只有场景图：场景锁定，用文字生成人物
+      fullPrompt = `重要：场景背景必须完全保持不变，包括环境、光线、构图、透视。
+根据描述在这个场景中生成人物，人物要与场景光影一致，透视正确，风格协调，照片级真实感。
+
+人物描述：${prompt || "自然站立的人物"}`;
+    } else if (hasCharacterImage && !hasSceneImage) {
+      // 只有人物图：保持人物特征，生成不同场景或姿势
+      fullPrompt = `保持人物图片中人物的外貌特征、服装、风格完全一致。
+${prompt || "生成人物在不同姿势和场景下的图片"}，照片级真实感。`;
+    } else {
+      // 纯文字生成
+      fullPrompt = prompt;
+    }
+
+    // 如果是组图模式，添加数量说明
+    if (actualNumImages > 1 && (hasSceneImage || hasCharacterImage)) {
+      if (hasSceneImage && hasCharacterImage) {
+        fullPrompt = `${PROMPT_CONFIG.sceneLock}
+
+生成一组共${actualNumImages}张图片，人物在不同姿势下展示。
+用户姿势要求：${prompt || "不同角度和姿势"}`;
+      } else if (hasSceneImage) {
+        fullPrompt = `重要：场景背景必须完全保持不变，包括环境、光线、构图、透视。
+生成一组共${actualNumImages}张图片，根据描述在这个场景中生成人物。
+
+人物描述：${prompt || "自然站立的人物，不同姿势"}`;
+      } else if (hasCharacterImage) {
+        fullPrompt = `保持人物图片中人物的外貌特征、服装、风格完全一致。
+生成一组共${actualNumImages}张图片，${prompt || "人物在不同姿势和场景下展示"}，照片级真实感。`;
       }
     }
 
     // 构建请求体
     const requestBody = {
       model: model,
-      prompt: groupPrompt,
+      prompt: fullPrompt,
       size: size,
       sequential_image_generation: "auto", // 组图模式
       sequential_image_generation_options: {
@@ -352,12 +446,12 @@ DOM.generateBtn.addEventListener("click", async () => {
       watermark: false,
     };
 
-    // 如果有参考图片
-    if (AppState.refImages.length > 0) {
-      requestBody.image =
-        AppState.refImages.length === 1
-          ? AppState.refImages[0]
-          : AppState.refImages;
+    // 传递图片（如果有的话）
+    const images = [];
+    if (hasCharacterImage) images.push(AppState.characterImage);
+    if (hasSceneImage) images.push(AppState.sceneImage);
+    if (images.length > 0) {
+      requestBody.image = images.length === 1 ? images[0] : images;
     }
 
     // 调用API
@@ -739,8 +833,15 @@ console.log("AI 组图生成工具 已启动");
 console.log("========================================");
 console.log("使用说明:");
 console.log("1. 配置 API Key 和模型");
-console.log("2. 输入提示词描述想要的组图");
-console.log("3. (可选) 上传参考图片");
-console.log('4. 点击"生成组图"按钮');
-console.log("5. 生成完成后可下载图片");
+console.log("2. (可选) 上传人物图 - 保持人物特征");
+console.log("3. (可选) 上传场景图 - 锁定场景不变");
+console.log("4. 输入描述内容");
+console.log('5. 点击"生成组图"按钮');
+console.log("6. 生成完成后可下载图片");
+console.log("========================================");
+console.log("提示：");
+console.log("- 有场景图+人物图：场景不变，人物换姿势");
+console.log("- 只有场景图：场景不变，文字生成人物");
+console.log("- 只有人物图：保持人物特征，换场景/姿势");
+console.log("- 都不上传：纯文字生成图片");
 console.log("========================================");
