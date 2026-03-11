@@ -16,11 +16,49 @@ const AppState = {
 
 // ========== 场景锁定提示词配置 ==========
 const PROMPT_CONFIG = {
-  // 场景锁定指令
-  sceneLock: `重要：场景背景必须完全保持不变，包括环境、光线、构图、透视。
-将人物图片中的模特自然融入到场景中。
-人物可以改变姿势、表情、视角角度，但场景绝对不能改变。
-确保人物与场景的光影一致，透视正确，风格协调，照片级真实感。`,
+  // 场景锁定 + 人物深度融合指令
+  sceneLock: `【最重要的要求】
+生成一张看起来像是用相机在同一时间、同一地点拍摄的真实照片。人物必须看起来像是真的站在场景中，而不是后期合成的。
+
+【场景锁定】
+背景、环境、光线、构图、透视必须100%保持原样，不能有任何改变。
+
+【深度融合 - 关键】
+1. 光照完全一致：人物身上的高光、阴影、反光必须完全来自场景中的光源。如果场景是暖光，人物也必须是暖色调；如果场景有侧光，人物阴影方向必须一致。
+
+2. 环境光影响：人物的肤色、衣服必须带有场景的颜色反射。比如在绿色森林里，皮肤要有绿色环境光；在红色房间里，要有红色反光。
+
+3. 接触阴影：人物脚部与地面接触处必须有真实的阴影，阴影颜色、方向、模糊程度要与场景中其他物体的阴影一致。
+
+4. 空气透视：如果场景有雾气、灰尘、光晕，人物也必须有相同程度的朦胧感。
+
+5. 景深匹配：人物清晰度必须与场景中同距离的物体完全一致，不能比背景更清晰或更模糊。
+
+6. 色彩统一：整体色调、对比度、饱和度必须完全一致，不能有人物单独调色的痕迹。
+
+7. 边缘处理：人物轮廓边缘要有自然的过渡，包括头发丝的半透明效果、衣服边缘的柔和过渡。
+
+【绝对禁止】
+- 禁止人物像"贴纸"或"图层"一样浮在背景上
+- 禁止人物边缘有白边、黑边、光晕或锯齿
+- 禁止人物有与场景不一致的光源
+- 禁止人物色调与场景不协调
+- 禁止人物比场景更清晰或更模糊
+
+最终效果：看起来就像是在这个场景中实地拍摄的照片。`,
+
+  // 只有场景图时的提示词（文字生成人物）
+  textGenerate: `【场景锁定】背景环境100%保持不变。
+
+【深度融合要求】
+1. 光照一致：人物的光源方向、色温、阴影必须与场景完全相同
+2. 环境光影响：人物肤色和服装要带有场景环境光的色调
+3. 接触阴影：脚部与地面接触处要有真实的阴影
+4. 透视正确：人物角度和比例要符合场景透视
+5. 景深匹配：清晰度与场景中同距离物体一致
+6. 边缘自然：轮廓边缘要有自然过渡，不能有"贴图感"
+
+最终效果：看起来就像是在这个场景中实地拍摄的照片。`,
 };
 
 // ========== DOM 元素引用 ==========
@@ -46,8 +84,8 @@ const DOM = {
   sceneUpload: document.getElementById("sceneUpload"),
   sceneImageInput: document.getElementById("sceneImageInput"),
   scenePlaceholder: document.getElementById("scenePlaceholder"),
-  sceneScrollContainer: document.getElementById("sceneScrollWrapper"),  // 滚动容器
-  scenePreviewContainer: document.getElementById("scenePreviewContainer"),  // 预览容器
+  sceneScrollContainer: document.getElementById("sceneScrollWrapper"), // 滚动容器
+  scenePreviewContainer: document.getElementById("scenePreviewContainer"), // 预览容器
   sceneCount: document.getElementById("sceneCount"),
   clearAllSceneBtn: document.getElementById("clearAllSceneBtn"),
   addMoreSceneBtn: document.getElementById("addMoreSceneBtn"),
@@ -274,7 +312,11 @@ function clearCharacterImage() {
 // 点击上传区域或添加按钮
 DOM.sceneUpload.addEventListener("click", (e) => {
   // 如果点击的是删除按钮或清空按钮，不触发上传
-  if (e.target.classList.contains("remove-btn") || e.target.classList.contains("clear-all-btn")) return;
+  if (
+    e.target.classList.contains("remove-btn") ||
+    e.target.classList.contains("clear-all-btn")
+  )
+    return;
   DOM.sceneImageInput.click();
 });
 
@@ -291,7 +333,9 @@ DOM.sceneUpload.addEventListener("dragleave", () => {
 DOM.sceneUpload.addEventListener("drop", (e) => {
   e.preventDefault();
   DOM.sceneUpload.classList.remove("dragover");
-  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+  const files = Array.from(e.dataTransfer.files).filter((f) =>
+    f.type.startsWith("image/"),
+  );
   if (files.length > 0) {
     handleSceneImages(files);
   }
@@ -321,7 +365,7 @@ async function handleSceneImages(files) {
     const base64 = await fileToBase64(file);
     AppState.sceneImages.push(base64);
   }
-  
+
   // 更新UI
   renderSceneImages();
   showToast(`已添加 ${files.length} 张场景图`, "success");
@@ -332,25 +376,31 @@ async function handleSceneImages(files) {
  */
 function renderSceneImages() {
   const count = AppState.sceneImages.length;
-  
+
   // 更新计数
   DOM.sceneCount.textContent = `(${count}张)`;
-  
+
   // 显示/隐藏清空按钮
   DOM.clearAllSceneBtn.style.display = count > 0 ? "block" : "none";
-  
+
   // 显示/隐藏占位符
   DOM.scenePlaceholder.style.display = count === 0 ? "block" : "none";
-  
+
   // 渲染预览
   if (count > 0) {
-    DOM.sceneScrollContainer.innerHTML = AppState.sceneImages.map((img, index) => `
+    DOM.sceneScrollContainer.innerHTML =
+      AppState.sceneImages
+        .map(
+          (img, index) => `
       <div class="scene-item" data-index="${index}">
         <img src="${img}" alt="场景图 ${index + 1}">
         <span class="scene-number">${index + 1}</span>
         <button class="scene-remove-btn" data-index="${index}" onclick="event.stopPropagation(); removeSceneImage(${index})">×</button>
       </div>
-    `).join("") + `
+    `,
+        )
+        .join("") +
+      `
       <div class="scene-item scene-add-btn" onclick="event.stopPropagation(); DOM.sceneImageInput.click();">
         <span class="add-icon">+</span>
         <span class="add-text">添加</span>
@@ -426,7 +476,7 @@ DOM.generateBtn.addEventListener("click", async () => {
 
     // 分批处理，每批5张并发
     const concurrency = 5;
-    
+
     for (let i = 0; i < sceneCount; i += concurrency) {
       // 检查是否取消
       if (AppState.cancelRequested) {
@@ -435,20 +485,25 @@ DOM.generateBtn.addEventListener("click", async () => {
       }
 
       const batch = AppState.sceneImages.slice(i, i + concurrency);
-      
+
       // 当前批次并发调用
       const batchPromises = batch.map(async (sceneImage, batchIndex) => {
         const globalIndex = i + batchIndex;
-        
+
         // 再次检查是否取消
         if (AppState.cancelRequested) {
-          return { success: false, error: "已取消", index: globalIndex, cancelled: true };
+          return {
+            success: false,
+            error: "已取消",
+            index: globalIndex,
+            cancelled: true,
+          };
         }
 
         try {
           // 构建提示词
           const fullPrompt = buildPrompt(sceneImage, prompt);
-          
+
           // 调用API（带超时）
           const result = await callSingleAPI({
             model,
@@ -456,7 +511,7 @@ DOM.generateBtn.addEventListener("click", async () => {
             sceneImage,
             characterImage: AppState.characterImage,
             prompt: fullPrompt,
-            size
+            size,
           });
 
           completed++;
@@ -475,7 +530,7 @@ DOM.generateBtn.addEventListener("click", async () => {
           completed++;
           updateProgress(completed, sceneCount);
           console.warn(`第${globalIndex + 1}张场景图生成失败:`, error.message);
-          
+
           return { success: false, error: error.message, index: globalIndex };
         }
       });
@@ -484,7 +539,7 @@ DOM.generateBtn.addEventListener("click", async () => {
       const batchResults = await Promise.all(batchPromises);
 
       // 收集结果
-      batchResults.forEach(r => {
+      batchResults.forEach((r) => {
         if (!r.success && !r.cancelled) {
           failed.push({ index: r.index, error: r.error });
         }
@@ -499,14 +554,20 @@ DOM.generateBtn.addEventListener("click", async () => {
 
     if (successCount > 0) {
       DOM.resultActions.style.display = "flex";
-      
+
       if (failCount > 0) {
-        showToast(`生成完成：成功 ${successCount} 张，失败 ${failCount} 张`, "warning");
-        updateStatus(`已完成（成功${successCount}张，失败${failCount}张）`, true);
+        showToast(
+          `生成完成：成功 ${successCount} 张，失败 ${failCount} 张`,
+          "warning",
+        );
+        updateStatus(
+          `已完成（成功${successCount}张，失败${failCount}张）`,
+          true,
+        );
       } else {
         showToast(`成功生成 ${successCount} 张图片！`, "success");
         updateStatus(`生成完成（${successCount}张）`, true);
-        
+
         // 全部成功时自动下载
         autoDownloadAllImages();
       }
@@ -536,18 +597,17 @@ DOM.generateBtn.addEventListener("click", async () => {
  */
 function buildPrompt(sceneImage, userPrompt) {
   const hasCharacter = !!AppState.characterImage;
-  
+
   if (hasCharacter) {
     // 有场景图 + 人物图：场景锁定，人物融入
     return `${PROMPT_CONFIG.sceneLock}
 
-用户要求：${userPrompt || "将人物自然融入到场景中"}`;
+【用户要求】${userPrompt || "将人物自然融入场景中，姿势自然放松"}`;
   } else {
     // 只有场景图：场景锁定，文字生成人物
-    return `重要：场景背景必须完全保持不变，包括环境、光线、构图、透视。
-根据描述在这个场景中生成人物，人物要与场景光影一致，透视正确，风格协调，照片级真实感。
+    return `${PROMPT_CONFIG.textGenerate}
 
-人物描述：${userPrompt || "自然站立的人物"}`;
+【人物描述】${userPrompt || "一个自然站立的人，姿势放松，表情自然"}`;
   }
 }
 
@@ -562,7 +622,14 @@ function updateProgress(completed, total) {
 /**
  * 调用单个API（带超时）
  */
-async function callSingleAPI({ model, apiKey, sceneImage, characterImage, prompt, size }) {
+async function callSingleAPI({
+  model,
+  apiKey,
+  sceneImage,
+  characterImage,
+  prompt,
+  size,
+}) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SINGLE_API_TIMEOUT);
 
@@ -594,23 +661,25 @@ async function callSingleAPI({ model, apiKey, sceneImage, characterImage, prompt
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
-      }
+      },
     );
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error?.message || `API调用失败 (${response.status})`);
+      throw new Error(
+        errorData.error?.message || `API调用失败 (${response.status})`,
+      );
     }
 
     const data = await response.json();
-    
+
     // 解析结果
     if (data.data && data.data.length > 0 && data.data[0].url) {
       return { url: data.data[0].url };
     }
-    
+
     throw new Error("API未返回图片URL");
   } catch (error) {
     clearTimeout(timeoutId);
@@ -865,103 +934,3 @@ console.log("- 有场景图+人物图：场景不变，人物融入场景");
 console.log("- 只有场景图：场景不变，文字生成人物");
 console.log("- 都不上传：纯文字生成图片");
 console.log("========================================");
-
-// ========== 辅助函数 ==========
-
-/**
- * 更新进度显示
- */
-function updateProgress(completed, total) {
-  const percent = Math.round((completed / total) * 100);
-  updateStatus(`正在生成... (${completed}/${total}) ${percent}%`, true);
-}
-
-/**
- * 构建提示词
- */
-function buildPrompt(sceneImage, userPrompt) {
-  const hasCharacterImage = !!AppState.characterImage;
-  
-  if (hasCharacterImage) {
-    // 有场景图 + 人物图：场景锁定，人物融入
-    return `${PROMPT_CONFIG.sceneLock}
-
-用户姿势要求：${userPrompt || "将人物自然融入场景中"}`;
-  } else {
-    // 只有场景图：场景锁定，用文字生成人物
-    return `重要：场景背景必须完全保持不变，包括环境、光线、构图、透视。
-根据描述在这个场景中生成人物，人物要与场景光影一致，透视正确，风格协调，照片级真实感。
-
-人物描述：${userPrompt || "自然站立的人物"}`;
-  }
-}
-
-/**
- * 单次API调用（带超时）
- */
-async function callSingleAPI({ model, apiKey, sceneImage, characterImage, prompt, size }) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SINGLE_API_TIMEOUT);
-
-  try {
-    // 构建请求体
-    const requestBody = {
-      model: model,
-      prompt: prompt,
-      size: size,
-      response_format: "url",
-      watermark: false,
-    };
-
-    // 传递图片
-    const images = [];
-    if (characterImage) images.push(characterImage);
-    if (sceneImage) images.push(sceneImage);
-    if (images.length > 0) {
-      requestBody.image = images.length === 1 ? images[0] : images;
-    }
-
-    // 调用API
-    const response = await fetch(
-      "https://ark.cn-beijing.volces.com/api/v3/images/generations",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      }
-    );
-
-    clearTimeout(timeoutId);
-
-    // 检查HTTP响应状态
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || `API调用失败 (${response.status})`);
-    }
-
-    // 解析响应
-    const data = await response.json();
-
-    // 检查错误
-    if (data.error) {
-      throw new Error(data.error.message || "API返回错误");
-    }
-
-    // 返回结果
-    if (data.data && data.data.length > 0 && data.data[0].url) {
-      return { url: data.data[0].url };
-    }
-
-    throw new Error("未返回图片URL");
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === "AbortError") {
-      throw new Error("生成超时（30秒）");
-    }
-    throw error;
-  }
-}
