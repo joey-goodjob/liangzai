@@ -6,7 +6,7 @@
     <title>AI 组图生成工具</title>
     <link rel="stylesheet" href="style.css" />
     <style>
-      /* 组图工具专用样式 */
+      /* 组图工具专用s样式 */
       .config-section {
         background: var(--bg-secondary);
         border: 1px solid var(--border-color);
@@ -628,16 +628,32 @@
           <div class="upload-section">
             <div class="scene-header">
               <h4>场景图 <span id="sceneCount">(0张)</span></h4>
-              <button class="clear-all-btn" id="clearAllSceneBtn" style="display: none">清空全部</button>
+              <button
+                class="clear-all-btn"
+                id="clearAllSceneBtn"
+                style="display: none"
+              >
+                清空全部
+              </button>
             </div>
             <div class="batch-upload-box scene-upload-box" id="sceneUpload">
-              <input type="file" id="sceneImageInput" accept="image/*" multiple hidden />
+              <input
+                type="file"
+                id="sceneImageInput"
+                accept="image/*"
+                multiple
+                hidden
+              />
               <div class="upload-placeholder" id="scenePlaceholder">
                 <span class="upload-icon">🏞️</span>
                 <p>点击或拖拽上传场景图（支持多选）</p>
                 <p class="upload-hint">支持 jpg/png/webp，可上传多张</p>
               </div>
-              <div class="scene-preview-container" id="scenePreviewContainer" style="display: none">
+              <div
+                class="scene-preview-container"
+                id="scenePreviewContainer"
+                style="display: none"
+              >
                 <div class="scene-scroll-wrapper" id="sceneScrollWrapper">
                   <!-- 场景图预览会动态添加到这里 -->
                 </div>
@@ -656,7 +672,11 @@
           <span class="btn-icon">🎨</span>
           生成组图
         </button>
-        <button class="btn-secondary btn-cancel" id="cancelBtn" style="display: none">
+        <button
+          class="btn-secondary btn-cancel"
+          id="cancelBtn"
+          style="display: none"
+        >
           <span>⏹️</span> 取消生成
         </button>
       </div>
