@@ -6,7 +6,7 @@
 
 This document describes how to use the Nano Banana 2 model for content sgeneration. The process consists of two steps:
 
-1. Create a generation task
+1. Create a 11generation task
 2. Query task status and results
 
 ## Authentication
