@@ -107,6 +107,174 @@ body {
     padding: 32px;
 }
 
+.main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 24px;
+    align-items: start;
+}
+
+.content-column {
+    min-width: 0;
+}
+
+.log-panel {
+    position: sticky;
+    top: 104px;
+    background: linear-gradient(180deg, rgba(18, 18, 26, 0.96), rgba(12, 12, 18, 0.96));
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(16px);
+    overflow: hidden;
+}
+
+.log-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.log-panel-header h3 {
+    font-size: 18px;
+    line-height: 1.2;
+}
+
+.log-panel-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.log-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.log-action-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+.log-summary {
+    margin: 16px 20px 0;
+    padding: 12px 14px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.18);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.log-list {
+    height: min(70vh, 720px);
+    overflow-y: auto;
+    padding: 16px 20px 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-primary) rgba(255, 255, 255, 0.08);
+}
+
+.log-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.log-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 999px;
+}
+
+.log-list::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.6);
+    border-radius: 999px;
+}
+
+.log-empty {
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.log-entry {
+    position: relative;
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.log-entry::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    border-radius: 12px 0 0 12px;
+    background: var(--text-muted);
+}
+
+.log-entry.info::before {
+    background: var(--accent-primary);
+}
+
+.log-entry.success::before {
+    background: var(--success);
+}
+
+.log-entry.warning::before {
+    background: var(--warning);
+}
+
+.log-entry.error::before {
+    background: var(--error);
+}
+
+.log-time {
+    color: var(--text-muted);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding-top: 2px;
+}
+
+.log-body {
+    min-width: 0;
+}
+
+.log-message {
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.log-meta {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.22);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 /* ========== 步骤区块 ========== */
 .step-section {
     background: var(--bg-secondary);
@@ -896,6 +1064,18 @@ textarea::placeholder {
     
     .main-container {
         padding: 16px;
+    }
+
+    .main-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .log-panel {
+        position: static;
+    }
+
+    .log-list {
+        height: 360px;
     }
     
     .step-section {

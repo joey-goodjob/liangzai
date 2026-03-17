@@ -539,6 +539,8 @@
 
     <!-- 主要内容区 -->
     <main class="main-container">
+      <div class="main-layout">
+        <div class="content-column">
       <!-- ========== 配置区域 ========== -->
       <section class="config-section">
         <h3>API 配置</h3>
@@ -696,6 +698,39 @@
           </button>
         </div>
       </section>
+        </div>
+
+        <aside class="log-panel" id="logPanel">
+          <div class="log-panel-header">
+            <div>
+              <p class="log-panel-label">Debug Console</p>
+              <h3>运行日志</h3>
+            </div>
+            <div class="log-actions">
+              <button
+                class="btn-secondary log-action-btn"
+                id="copyLogsBtn"
+                type="button"
+              >
+                复制日志
+              </button>
+              <button
+                class="btn-secondary log-action-btn"
+                id="clearLogsBtn"
+                type="button"
+              >
+                清空日志
+              </button>
+            </div>
+          </div>
+          <div class="log-summary" id="logSummary">等待任务开始</div>
+          <div class="log-list" id="logList">
+            <div class="log-empty" id="logEmptyState">
+              右侧会显示每一步运行记录、接口状态和失败原因。
+            </div>
+          </div>
+        </aside>
+      </div>
     </main>
 
     <!-- 加载遮罩 -->

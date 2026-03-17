@@ -12,6 +12,8 @@ const AppState = {
   isGenerating: false, // 是否正在生成
   lightboxIndex: 0, // Lightbox 当前显示的图片索引
   cancelRequested: false, // 用户是否请求取消
+  logEntries: [],
+  currentRunId: null,
 };
 
 // ========== 场景锁定提示词配置 ==========
@@ -111,6 +113,14 @@ const DOM = {
   // Toast
   toast: document.getElementById("toast"),
 
+  // 日志面板
+  logPanel: document.getElementById("logPanel"),
+  logList: document.getElementById("logList"),
+  logSummary: document.getElementById("logSummary"),
+  clearLogsBtn: document.getElementById("clearLogsBtn"),
+  copyLogsBtn: document.getElementById("copyLogsBtn"),
+  logEmptyState: document.getElementById("logEmptyState"),
+
   // Lightbox 图片预览
   lightbox: document.getElementById("lightbox"),
   lightboxImage: document.getElementById("lightboxImage"),
@@ -148,6 +158,202 @@ function setLoading(show, text = "处理中...", progress = 0) {
  */
 function updateStatus(text, isActive = false) {
   DOM.statusText.innerHTML = `<span class="status-dot ${isActive ? "active" : ""}"></span> ${text}`;
+}
+
+function getTimestamp() {
+  return new Date().toLocaleTimeString("zh-CN", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function setRunContext(runId) {
+  AppState.currentRunId = runId;
+}
+
+function updateLogSummary(text) {
+  if (DOM.logSummary) {
+    DOM.logSummary.textContent = text;
+  }
+}
+
+function shouldStickLogToBottom() {
+  if (!DOM.logList) {
+    return false;
+  }
+
+  const threshold = 32;
+  const distanceToBottom =
+    DOM.logList.scrollHeight - DOM.logList.scrollTop - DOM.logList.clientHeight;
+
+  return distanceToBottom <= threshold;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function formatMeta(meta) {
+  if (!meta) {
+    return "";
+  }
+
+  if (typeof meta === "string") {
+    return meta;
+  }
+
+  return Object.entries(meta)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => {
+      if (typeof value === "object") {
+        return `${key}: ${JSON.stringify(value, null, 2)}`;
+      }
+
+      return `${key}: ${value}`;
+    })
+    .join("\n");
+}
+
+function renderLogEntry(entry) {
+  if (!DOM.logList) {
+    return;
+  }
+
+  const autoStick = shouldStickLogToBottom();
+
+  if (DOM.logEmptyState) {
+    DOM.logEmptyState.remove();
+    DOM.logEmptyState = null;
+  }
+
+  const item = document.createElement("div");
+  item.className = `log-entry ${entry.level}`;
+
+  const metaText = formatMeta(entry.meta);
+
+  item.innerHTML = `
+    <div class="log-time">${escapeHtml(entry.time)}</div>
+    <div class="log-body">
+      <div class="log-message">${escapeHtml(entry.message)}</div>
+      ${
+        metaText
+          ? `<div class="log-meta">${escapeHtml(metaText)}</div>`
+          : ""
+      }
+    </div>
+  `;
+
+  DOM.logList.appendChild(item);
+
+  if (autoStick) {
+    DOM.logList.scrollTop = DOM.logList.scrollHeight;
+  }
+}
+
+function clearLogs(summaryText = "等待任务开始") {
+  AppState.logEntries = [];
+
+  if (DOM.logList) {
+    DOM.logList.innerHTML = `
+      <div class="log-empty" id="logEmptyState">
+        右侧会显示每一步运行记录、接口状态和失败原因。
+      </div>
+    `;
+    DOM.logEmptyState = document.getElementById("logEmptyState");
+  }
+
+  updateLogSummary(summaryText);
+}
+
+function addLog(level, message, meta) {
+  const entry = {
+    id: `${Date.now()}-${AppState.logEntries.length + 1}`,
+    runId: AppState.currentRunId,
+    level,
+    message,
+    meta,
+    time: getTimestamp(),
+  };
+
+  AppState.logEntries.push(entry);
+  renderLogEntry(entry);
+}
+
+function copyLogs() {
+  const text = AppState.logEntries
+    .map((entry) => {
+      const metaText = formatMeta(entry.meta);
+      return metaText
+        ? `[${entry.time}] [${entry.level.toUpperCase()}] ${entry.message}\n${metaText}`
+        : `[${entry.time}] [${entry.level.toUpperCase()}] ${entry.message}`;
+    })
+    .join("\n\n");
+
+  if (!text) {
+    showToast("暂无日志可复制", "info");
+    return;
+  }
+
+  const copyTask = navigator.clipboard?.writeText(text);
+
+  if (copyTask && typeof copyTask.then === "function") {
+    copyTask
+      .then(() => {
+        showToast("日志已复制", "success");
+        addLog("info", "已复制当前日志到剪贴板");
+      })
+      .catch(() => {
+        showToast("复制日志失败，请检查浏览器权限", "error");
+        addLog("error", "复制日志失败", {
+          reason: "浏览器未授予 clipboard 权限",
+        });
+      });
+    return;
+  }
+
+  showToast("当前浏览器不支持复制日志", "error");
+  addLog("error", "复制日志失败", {
+    reason: "当前环境不支持 navigator.clipboard",
+  });
+}
+
+function formatError(error, context = {}) {
+  if (!error) {
+    return {
+      message: "未知错误",
+      meta: context,
+    };
+  }
+
+  const meta = { ...context };
+
+  if (error.status) {
+    meta.status = error.status;
+  }
+
+  if (error.responseText) {
+    meta.response = error.responseText;
+  }
+
+  if (error.details) {
+    meta.details = error.details;
+  }
+
+  if (error.name && error.name !== "Error") {
+    meta.name = error.name;
+  }
+
+  return {
+    message: error.message || "未知错误",
+    meta,
+  };
 }
 
 /**
@@ -238,6 +444,15 @@ DOM.promptInput.addEventListener("input", () => {
   DOM.charCount.textContent = `${length} 字`;
 });
 
+DOM.clearLogsBtn.addEventListener("click", () => {
+  clearLogs();
+  showToast("日志已清空", "info");
+});
+
+DOM.copyLogsBtn.addEventListener("click", () => {
+  copyLogs();
+});
+
 // ========== 人物图上传 ==========
 
 // 点击上传
@@ -293,6 +508,11 @@ async function handleCharacterImage(file) {
   DOM.characterPlaceholder.style.display = "none";
 
   showToast("人物图已上传", "success");
+  addLog("info", "人物图上传完成", {
+    name: file.name,
+    size: `${(file.size / 1024).toFixed(1)} KB`,
+    type: file.type,
+  });
 }
 
 /**
@@ -305,6 +525,7 @@ function clearCharacterImage() {
   DOM.characterPlaceholder.style.display = "block";
   DOM.characterImageInput.value = "";
   showToast("人物图已移除", "info");
+  addLog("info", "人物图已移除");
 }
 
 // ========== 场景图上传（支持多张） ==========
@@ -364,6 +585,11 @@ async function handleSceneImages(files) {
   for (const file of files) {
     const base64 = await fileToBase64(file);
     AppState.sceneImages.push(base64);
+    addLog("info", "场景图已加入队列", {
+      name: file.name,
+      size: `${(file.size / 1024).toFixed(1)} KB`,
+      totalScenes: AppState.sceneImages.length,
+    });
   }
 
   // 更新UI
@@ -421,6 +647,10 @@ function removeSceneImage(index) {
   AppState.sceneImages.splice(index, 1);
   renderSceneImages();
   showToast("已移除该场景图", "info");
+  addLog("info", "已移除场景图", {
+    sceneIndex: index + 1,
+    remainingScenes: AppState.sceneImages.length,
+  });
 }
 
 /**
@@ -430,6 +660,7 @@ function clearAllSceneImages() {
   AppState.sceneImages = [];
   renderSceneImages();
   showToast("已清空所有场景图", "info");
+  addLog("warning", "已清空全部场景图");
 }
 
 // ========== 生成组图 ==========
@@ -437,23 +668,85 @@ function clearAllSceneImages() {
 // 超时配置
 const SINGLE_API_TIMEOUT = 30000; // 单次API调用超时：30秒
 
+function buildRequestSummary({ model, size, prompt, imageCount }) {
+  return {
+    model,
+    size,
+    imageCount,
+    promptLength: prompt.length,
+    promptPreview: prompt.slice(0, 120),
+  };
+}
+
+async function parseJsonSafely(response) {
+  const responseText = await response.text();
+
+  if (!responseText) {
+    return { data: null, responseText: "" };
+  }
+
+  try {
+    return {
+      data: JSON.parse(responseText),
+      responseText,
+    };
+  } catch (error) {
+    return {
+      data: null,
+      responseText,
+      parseError: error,
+    };
+  }
+}
+
+function summarizeResponsePayload(data) {
+  if (!data || typeof data !== "object") {
+    return "empty response";
+  }
+
+  return JSON.stringify(
+    {
+      created: data.created,
+      model: data.model,
+      dataLength: Array.isArray(data.data) ? data.data.length : 0,
+      hasFirstUrl: Boolean(data.data?.[0]?.url),
+      error: data.error?.message || data.message,
+    },
+    null,
+    2,
+  );
+}
+
 DOM.generateBtn.addEventListener("click", async () => {
   // 获取配置
   const model = DOM.modelSelect.value;
   const apiKey = DOM.apiKeyInput.value.trim();
   const size = DOM.sizeSelect.value;
   const prompt = DOM.promptInput.value.trim();
+  const sceneCount = AppState.sceneImages.length;
+  const runId = `run-${Date.now()}`;
+
+  clearLogs("准备开始新任务...");
+  setRunContext(runId);
+  addLog("info", "收到生成请求，开始执行前置校验", {
+    runId,
+  });
 
   // 验证 API Key
   if (!apiKey) {
     showToast("请输入 API Key", "error");
+    addLog("error", "生成前校验失败", {
+      reason: "缺少 API Key",
+    });
     return;
   }
 
   // 检查是否有场景图
-  const sceneCount = AppState.sceneImages.length;
   if (sceneCount === 0) {
     showToast("请上传至少1张场景图", "error");
+    addLog("error", "生成前校验失败", {
+      reason: "未上传场景图",
+    });
     return;
   }
 
@@ -463,28 +756,52 @@ DOM.generateBtn.addEventListener("click", async () => {
   AppState.results = [];
   DOM.generateBtn.disabled = true;
   DOM.cancelBtn.style.display = "inline-flex";
+  DOM.cancelBtn.disabled = false;
   DOM.resultGrid.innerHTML = "";
   DOM.resultActions.style.display = "none";
 
   updateStatus(`准备生成 ${sceneCount} 张图片...`, true);
+  addLog("info", "开始新的生成任务", {
+    runId: AppState.currentRunId,
+    model,
+    size,
+    sceneCount,
+    hasCharacterImage: AppState.characterImage ? "是" : "否",
+    promptLength: prompt.length,
+  });
+  updateLogSummary(
+    `任务 ${AppState.currentRunId} 进行中，待处理 ${sceneCount} 张场景图`,
+  );
 
   try {
     // 批量处理场景图
     const results = [];
     const failed = [];
     let completed = 0;
+    const startedAt = Date.now();
 
     // 分批处理，每批5张并发
     const concurrency = 5;
+    addLog("info", "并发参数已锁定", {
+      concurrency,
+      timeoutMs: SINGLE_API_TIMEOUT,
+    });
 
     for (let i = 0; i < sceneCount; i += concurrency) {
       // 检查是否取消
       if (AppState.cancelRequested) {
         showToast("已取消生成", "info");
+        addLog("warning", "检测到取消标记，停止后续批次");
         break;
       }
 
       const batch = AppState.sceneImages.slice(i, i + concurrency);
+      const batchLabel = `${i + 1}-${i + batch.length}`;
+      addLog("info", "开始处理批次", {
+        batch: batchLabel,
+        count: batch.length,
+      });
+      updateLogSummary(`正在处理批次 ${batchLabel}，总进度 ${completed}/${sceneCount}`);
 
       // 当前批次并发调用
       const batchPromises = batch.map(async (sceneImage, batchIndex) => {
@@ -492,6 +809,9 @@ DOM.generateBtn.addEventListener("click", async () => {
 
         // 再次检查是否取消
         if (AppState.cancelRequested) {
+          addLog("warning", "请求在发出前被取消", {
+            sceneIndex: globalIndex + 1,
+          });
           return {
             success: false,
             error: "已取消",
@@ -503,6 +823,15 @@ DOM.generateBtn.addEventListener("click", async () => {
         try {
           // 构建提示词
           const fullPrompt = buildPrompt(sceneImage, prompt);
+          addLog("info", "准备发起图片生成请求", {
+            sceneIndex: globalIndex + 1,
+            ...buildRequestSummary({
+              model,
+              size,
+              prompt: fullPrompt,
+              imageCount: AppState.characterImage ? 2 : 1,
+            }),
+          });
 
           // 调用API（带超时）
           const result = await callSingleAPI({
@@ -512,10 +841,12 @@ DOM.generateBtn.addEventListener("click", async () => {
             characterImage: AppState.characterImage,
             prompt: fullPrompt,
             size,
+            sceneIndex: globalIndex + 1,
           });
 
           completed++;
           updateProgress(completed, sceneCount);
+          updateLogSummary(`已完成 ${completed}/${sceneCount}，最近成功第 ${globalIndex + 1} 张`);
 
           // 立即显示结果
           if (result.url) {
@@ -523,13 +854,27 @@ DOM.generateBtn.addEventListener("click", async () => {
             AppState.results.push({ url: result.url, sceneIndex: globalIndex });
             appendResultCard(result.url, AppState.results.length - 1);
             results.push({ url: result.url, sceneIndex: globalIndex });
+            addLog("success", "图片生成成功", {
+              sceneIndex: globalIndex + 1,
+              outputIndex: AppState.results.length,
+              url: result.url,
+            });
           }
 
           return { success: true, result, index: globalIndex };
         } catch (error) {
           completed++;
           updateProgress(completed, sceneCount);
+          const formattedError = formatError(error, {
+            sceneIndex: globalIndex + 1,
+          });
           console.warn(`第${globalIndex + 1}张场景图生成失败:`, error.message);
+          addLog(
+            "error",
+            `第 ${globalIndex + 1} 张场景图生成失败：${formattedError.message}`,
+            formattedError.meta,
+          );
+          updateLogSummary(`已完成 ${completed}/${sceneCount}，最近失败第 ${globalIndex + 1} 张`);
 
           return { success: false, error: error.message, index: globalIndex };
         }
@@ -545,12 +890,18 @@ DOM.generateBtn.addEventListener("click", async () => {
         }
       });
 
-      // 继续下一批
+      addLog("info", "批次处理结束", {
+        batch: batchLabel,
+        success: batchResults.filter((item) => item.success).length,
+        failed: batchResults.filter((item) => !item.success && !item.cancelled).length,
+        cancelled: batchResults.filter((item) => item.cancelled).length,
+      });
     }
 
     // 生成完成
     const successCount = results.length;
     const failCount = failed.length;
+    const durationMs = Date.now() - startedAt;
 
     if (successCount > 0) {
       DOM.resultActions.style.display = "flex";
@@ -564,9 +915,21 @@ DOM.generateBtn.addEventListener("click", async () => {
           `已完成（成功${successCount}张，失败${failCount}张）`,
           true,
         );
+        updateLogSummary(`任务完成：成功 ${successCount}，失败 ${failCount}`);
+        addLog("warning", "任务完成，但存在失败项", {
+          successCount,
+          failCount,
+          cancelled: AppState.cancelRequested ? "是" : "否",
+          durationMs,
+        });
       } else {
         showToast(`成功生成 ${successCount} 张图片！`, "success");
         updateStatus(`生成完成（${successCount}张）`, true);
+        updateLogSummary(`任务完成：全部 ${successCount} 张生成成功`);
+        addLog("success", "任务完成，全部图片生成成功", {
+          successCount,
+          durationMs,
+        });
 
         // 全部成功时自动下载
         autoDownloadAllImages();
@@ -574,6 +937,12 @@ DOM.generateBtn.addEventListener("click", async () => {
     } else {
       showToast("没有成功生成任何图片", "error");
       updateStatus("生成失败", false);
+      updateLogSummary("任务结束：没有成功结果");
+      addLog("error", "任务结束，没有成功生成任何图片", {
+        failCount,
+        cancelled: AppState.cancelRequested ? "是" : "否",
+        durationMs,
+      });
       DOM.resultGrid.innerHTML = `
         <div class="empty-state">
           <span class="empty-icon">❌</span>
@@ -585,10 +954,23 @@ DOM.generateBtn.addEventListener("click", async () => {
     console.error("生成失败:", error);
     showToast(`生成失败: ${error.message}`, "error");
     updateStatus("生成失败", false);
+    updateLogSummary("任务异常中断");
+    const formattedError = formatError(error);
+    addLog(
+      "error",
+      `任务执行过程中出现未捕获错误：${formattedError.message}`,
+      formattedError.meta,
+    );
   } finally {
     AppState.isGenerating = false;
     DOM.generateBtn.disabled = false;
     DOM.cancelBtn.style.display = "none";
+    DOM.cancelBtn.textContent = "取消生成";
+    addLog("info", "任务收尾完成", {
+      runId: AppState.currentRunId,
+      resultCount: AppState.results.length,
+      cancelled: AppState.cancelRequested ? "是" : "否",
+    });
   }
 });
 
@@ -629,6 +1011,7 @@ async function callSingleAPI({
   characterImage,
   prompt,
   size,
+  sceneIndex,
 }) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SINGLE_API_TIMEOUT);
@@ -651,6 +1034,13 @@ async function callSingleAPI({
       requestBody.image = images.length === 1 ? images[0] : images;
     }
 
+    addLog("info", "请求已发送到图像生成接口", {
+      sceneIndex,
+      endpoint: "https://ark.cn-beijing.volces.com/api/v3/images/generations",
+      timeoutMs: SINGLE_API_TIMEOUT,
+      imageCount: images.length,
+    });
+
     const response = await fetch(
       "https://ark.cn-beijing.volces.com/api/v3/images/generations",
       {
@@ -665,26 +1055,55 @@ async function callSingleAPI({
     );
 
     clearTimeout(timeoutId);
+    const { data, responseText, parseError } = await parseJsonSafely(response);
+
+    addLog("info", "接口已返回响应", {
+      sceneIndex,
+      status: response.status,
+      ok: response.ok ? "是" : "否",
+    });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        errorData.error?.message || `API调用失败 (${response.status})`,
+      const error = new Error(
+        data?.error?.message || data?.message || `API调用失败 (${response.status})`,
       );
+      error.status = response.status;
+      error.responseText = responseText?.slice(0, 500);
+      if (parseError) {
+        error.details = "错误响应不是合法 JSON";
+      }
+      throw error;
     }
 
-    const data = await response.json();
+    if (parseError) {
+      const error = new Error("接口返回内容不是合法 JSON");
+      error.status = response.status;
+      error.responseText = responseText?.slice(0, 500);
+      error.details = parseError.message;
+      throw error;
+    }
 
     // 解析结果
     if (data.data && data.data.length > 0 && data.data[0].url) {
+      addLog("success", "接口返回了可用图片 URL", {
+        sceneIndex,
+        status: response.status,
+        dataLength: data.data.length,
+      });
       return { url: data.data[0].url };
     }
 
-    throw new Error("API未返回图片URL");
+    const error = new Error("API未返回图片 URL");
+    error.status = response.status;
+    error.responseText = responseText?.slice(0, 500);
+    error.details = summarizeResponsePayload(data);
+    throw error;
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === "AbortError") {
-      throw new Error("生成超时（30秒）");
+      const timeoutError = new Error("生成超时（30秒）");
+      timeoutError.details = `sceneIndex=${sceneIndex}`;
+      throw timeoutError;
     }
     throw error;
   }
@@ -696,6 +1115,10 @@ DOM.cancelBtn.addEventListener("click", () => {
   DOM.cancelBtn.disabled = true;
   DOM.cancelBtn.textContent = "正在取消...";
   showToast("正在取消生成...", "info");
+  updateLogSummary("已收到取消请求，等待当前批次收尾");
+  addLog("warning", "用户点击了取消生成", {
+    runId: AppState.currentRunId,
+  });
 });
 
 /**
@@ -763,11 +1186,18 @@ function renderResults() {
 async function downloadSingleImage(index) {
   if (AppState.results[index]) {
     const timestamp = new Date().toISOString().slice(0, 10);
+    addLog("info", "开始下载单张图片", {
+      index: index + 1,
+      filename: `group-image-${timestamp}-${index + 1}.jpg`,
+    });
     await downloadImage(
       AppState.results[index].url,
       `group-image-${timestamp}-${index + 1}.jpg`,
     );
     showToast("下载完成", "success");
+    addLog("success", "单张图片下载完成", {
+      index: index + 1,
+    });
   }
 }
 
@@ -775,6 +1205,9 @@ async function downloadSingleImage(index) {
 DOM.downloadAllBtn.addEventListener("click", async () => {
   if (AppState.results.length === 0) {
     showToast("没有可下载的图片", "error");
+    addLog("error", "批量下载失败", {
+      reason: "当前没有可下载的结果",
+    });
     return;
   }
 
@@ -782,6 +1215,10 @@ DOM.downloadAllBtn.addEventListener("click", async () => {
   const total = AppState.results.length;
 
   showToast(`开始下载 ${total} 张图片...`, "success");
+  updateLogSummary(`开始批量下载 ${total} 张图片`);
+  addLog("info", "开始批量下载图片", {
+    total,
+  });
 
   // 逐个下载，避免浏览器阻止
   for (let i = 0; i < total; i++) {
@@ -801,6 +1238,10 @@ DOM.downloadAllBtn.addEventListener("click", async () => {
 
   updateStatus(`下载完成 (${total}张)`, true);
   showToast(`已下载全部 ${total} 张图片！`, "success");
+  updateLogSummary(`批量下载完成，共 ${total} 张`);
+  addLog("success", "批量下载完成", {
+    total,
+  });
 });
 
 /**
@@ -809,6 +1250,9 @@ DOM.downloadAllBtn.addEventListener("click", async () => {
 async function autoDownloadAllImages() {
   const total = AppState.results.length;
   const timestamp = new Date().toISOString().slice(0, 10);
+  addLog("info", "全部成功，开始自动下载", {
+    total,
+  });
 
   for (let i = 0; i < total; i++) {
     const img = AppState.results[i];
@@ -825,6 +1269,11 @@ async function autoDownloadAllImages() {
 
   updateStatus(`已完成 (${total}张)`, true);
   showToast(`已自动下载全部 ${total} 张图片到本地！`, "success");
+  updateLogSummary(`自动下载完成，共 ${total} 张`);
+  addLog("success", "自动下载完成", {
+    total,
+    prefix: `group-image-${timestamp}-*.jpg`,
+  });
 }
 
 // ========== Lightbox 图片预览功能 ==========
@@ -918,6 +1367,10 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ========== 初始化 ==========
+clearLogs();
+setRunContext("idle");
+addLog("info", "页面初始化完成，日志面板已就绪");
+
 console.log("========================================");
 console.log("AI 组图生成工具 已启动");
 console.log("========================================");
