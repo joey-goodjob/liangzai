@@ -4,7 +4,7 @@
 
 ## Overview
 
-This document describes how to use the Nano Banana 2 model for content generation. The process consists of two steps:
+This document describes how to use the Nano Banana 2 model for content sgeneration. The process consists of two steps:
 
 1. Create a generation task
 2. Query task status and results
