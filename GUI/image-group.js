@@ -20,48 +20,56 @@ const AppState = {
 const PROMPT_CONFIG = {
   // 场景锁定 + 人物深度融合指令
   sceneLock: `【最重要的要求】
-生成一张看起来像是用相机在同一时间、同一地点拍摄的真实照片。人物必须看起来像是真的站在场景中，而不是后期合成的。
+生成一张像在同一时间、同一地点直接拍摄的真实照片，人物必须像真实站在场景里，不能有后期合成感。
 
 【场景锁定】
-背景、环境、光线、构图、透视必须100%保持原样，不能有任何改变。
+背景、环境、构图、机位、透视、主体光线保持不变。
 
-【深度融合 - 关键】
-1. 光照完全一致：人物身上的高光、阴影、反光必须完全来自场景中的光源。如果场景是暖光，人物也必须是暖色调；如果场景有侧光，人物阴影方向必须一致。
-
-2. 环境光影响：人物的肤色、衣服必须带有场景的颜色反射。比如在绿色森林里，皮肤要有绿色环境光；在红色房间里，要有红色反光。
-
-3. 接触阴影：人物脚部与地面接触处必须有真实的阴影，阴影颜色、方向、模糊程度要与场景中其他物体的阴影一致。
-
-4. 空气透视：如果场景有雾气、灰尘、光晕，人物也必须有相同程度的朦胧感。
-
-5. 景深匹配：人物清晰度必须与场景中同距离的物体完全一致，不能比背景更清晰或更模糊。
-
-6. 色彩统一：整体色调、对比度、饱和度必须完全一致，不能有人物单独调色的痕迹。
-
-7. 边缘处理：人物轮廓边缘要有自然的过渡，包括头发丝的半透明效果、衣服边缘的柔和过渡。
+【人物融合要求】
+1. 保留参考人物的脸部、发型、体型和服装特征。
+2. 人物姿势按用户要求自然调整，站位与场景比例正确。
+3. 人物高光、阴影、环境反光、接触阴影、景深、边缘透明过渡必须与场景一致。
+4. 整体色调统一，不能出现单独调色或比背景更清晰/更模糊的情况。
 
 【绝对禁止】
-- 禁止人物像"贴纸"或"图层"一样浮在背景上
-- 禁止人物边缘有白边、黑边、光晕或锯齿
-- 禁止人物有与场景不一致的光源
-- 禁止人物色调与场景不协调
-- 禁止人物比场景更清晰或更模糊
+- 贴纸感、悬浮感、白边黑边、额外光源、比例错误、边缘锯齿
 
 最终效果：看起来就像是在这个场景中实地拍摄的照片。`,
 
   // 只有场景图时的提示词（文字生成人物）
-  textGenerate: `【场景锁定】背景环境100%保持不变。
+  textGenerate: `【场景锁定】背景环境、构图、机位、透视保持不变。
 
-【深度融合要求】
-1. 光照一致：人物的光源方向、色温、阴影必须与场景完全相同
-2. 环境光影响：人物肤色和服装要带有场景环境光的色调
-3. 接触阴影：脚部与地面接触处要有真实的阴影
-4. 透视正确：人物角度和比例要符合场景透视
-5. 景深匹配：清晰度与场景中同距离物体一致
-6. 边缘自然：轮廓边缘要有自然过渡，不能有"贴图感"
+【人物生成要求】
+根据用户描述生成一个真实人物，人物与场景的光照、环境反光、接触阴影、景深、比例、边缘过渡保持一致，不能有贴图感。
 
 最终效果：看起来就像是在这个场景中实地拍摄的照片。`,
 };
+
+const PROVIDERS = {
+  VOLCENGINE: "volcengine",
+  NANO: "nano",
+};
+
+const MODEL_PROVIDER_MAP = {
+  "doubao-seedream-4-5-251128": PROVIDERS.VOLCENGINE,
+  "doubao-seedream-5-0-260128": PROVIDERS.VOLCENGINE,
+  "nano-banana-2": PROVIDERS.NANO,
+};
+
+const NANO_CONFIG = {
+  uploadEndpoint: "/api/upload",
+  createTaskEndpoint: "/api/nano/create-task",
+  taskStatusEndpoint: "/api/nano/task-status",
+  pollIntervalMs: 3000,
+  timeoutMsBySize: {
+    "2K": 5 * 60 * 1000,
+    "4K": 8 * 60 * 1000,
+  },
+};
+
+function getProviderForModel(model) {
+  return MODEL_PROVIDER_MAP[model] || PROVIDERS.VOLCENGINE;
+}
 
 // ========== DOM 元素引用 ==========
 const DOM = {
@@ -354,6 +362,21 @@ function formatError(error, context = {}) {
     message: error.message || "未知错误",
     meta,
   };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getFileExtensionFromDataUrl(dataUrl) {
+  if (typeof dataUrl !== "string") {
+    return "png";
+  }
+
+  const match = /^data:([^;]+);base64,/.exec(dataUrl);
+  const mimeType = match?.[1] || "";
+  const subtype = mimeType.split("/")[1];
+  return subtype ? subtype.replace("jpeg", "jpg") : "png";
 }
 
 /**
@@ -665,11 +688,49 @@ function clearAllSceneImages() {
 
 // ========== 生成组图 ==========
 
-// 超时配置
-const SINGLE_API_TIMEOUT = 30000; // 单次API调用超时：30秒
+// 超时与并发配置
+const REQUEST_PROFILE = {
+  volcengineDefault: {
+    timeoutMs: 30000,
+    concurrency: 5,
+  },
+  volcengineCharacterFusion: {
+    timeoutMs: 120000,
+    concurrency: 2,
+  },
+  volcengineCharacterFusion4K: {
+    timeoutMs: 180000,
+    concurrency: 1,
+  },
+  nano2K: {
+    timeoutMs: NANO_CONFIG.timeoutMsBySize["2K"],
+    concurrency: 2,
+  },
+  nano4K: {
+    timeoutMs: NANO_CONFIG.timeoutMsBySize["4K"],
+    concurrency: 1,
+  },
+};
 
-function buildRequestSummary({ model, size, prompt, imageCount }) {
+function getRequestProfile({ provider, hasCharacterImage, size }) {
+  if (provider === PROVIDERS.NANO) {
+    return size === "4K" ? REQUEST_PROFILE.nano4K : REQUEST_PROFILE.nano2K;
+  }
+
+  if (!hasCharacterImage) {
+    return REQUEST_PROFILE.volcengineDefault;
+  }
+
+  if (size === "4K") {
+    return REQUEST_PROFILE.volcengineCharacterFusion4K;
+  }
+
+  return REQUEST_PROFILE.volcengineCharacterFusion;
+}
+
+function buildRequestSummary({ provider, model, size, prompt, imageCount }) {
   return {
+    provider,
     model,
     size,
     imageCount,
@@ -699,6 +760,243 @@ async function parseJsonSafely(response) {
   }
 }
 
+function formatDurationMs(ms) {
+  const seconds = Math.round(ms / 1000);
+  return `${seconds}秒`;
+}
+
+function estimateJsonSizeKb(payload) {
+  try {
+    const text = JSON.stringify(payload);
+    return (new TextEncoder().encode(text).length / 1024).toFixed(1);
+  } catch {
+    return "unknown";
+  }
+}
+
+async function postJson(url, payload, options = {}) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  });
+  const { data, responseText, parseError } = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    const error = new Error(
+      data?.error?.message || data?.message || `请求失败 (${response.status})`,
+    );
+    error.status = response.status;
+    error.responseText = responseText?.slice(0, 500);
+    error.details = data?.error?.details || parseError?.message;
+    throw error;
+  }
+
+  if (parseError) {
+    const error = new Error("接口返回内容不是合法 JSON");
+    error.status = response.status;
+    error.responseText = responseText?.slice(0, 500);
+    error.details = parseError.message;
+    throw error;
+  }
+
+  return data;
+}
+
+async function uploadNanoReferenceImage({ dataUrl, filename, role, sceneIndex }) {
+  addLog("info", "uploadStart", {
+    provider: PROVIDERS.NANO,
+    role,
+    sceneIndex,
+    filename,
+  });
+
+  const data = await postJson(NANO_CONFIG.uploadEndpoint, {
+    dataUrl,
+    filename,
+  });
+
+  addLog("success", "uploadDone", {
+    provider: PROVIDERS.NANO,
+    role,
+    sceneIndex,
+    filename,
+    url: data.url,
+  });
+
+  return data.url;
+}
+
+async function createNanoTask({ apiKey, prompt, imageUrls, resolution, sceneIndex }) {
+  const data = await postJson(NANO_CONFIG.createTaskEndpoint, {
+    apiKey,
+    prompt,
+    imageUrls,
+    resolution,
+  });
+
+  addLog("info", "taskCreated", {
+    provider: PROVIDERS.NANO,
+    sceneIndex,
+    taskId: data.taskId,
+    resolution,
+    imageCount: imageUrls.length,
+  });
+
+  return data.taskId;
+}
+
+async function pollNanoTask({ apiKey, taskId, resolution, sceneIndex, timeoutMs }) {
+  const startedAt = Date.now();
+  let attempt = 0;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (AppState.cancelRequested) {
+      throw new Error("已取消");
+    }
+
+    attempt += 1;
+    const data = await postJson(NANO_CONFIG.taskStatusEndpoint, {
+      apiKey,
+      taskId,
+    });
+
+    addLog("info", "polling", {
+      provider: PROVIDERS.NANO,
+      sceneIndex,
+      taskId,
+      attempt,
+      state: data.state,
+      resolution,
+    });
+
+    if (data.state === "success" && data.url) {
+      addLog("success", "taskSuccess", {
+        provider: PROVIDERS.NANO,
+        sceneIndex,
+        taskId,
+        costTime: data.costTime,
+      });
+      return { url: data.url };
+    }
+
+    if (data.state === "fail") {
+      addLog("error", "taskFail", {
+        provider: PROVIDERS.NANO,
+        sceneIndex,
+        taskId,
+        failMsg: data.failMsg,
+      });
+      const error = new Error(data.failMsg || "Nano 任务失败");
+      error.details = `taskId=${taskId}`;
+      throw error;
+    }
+
+    await sleep(NANO_CONFIG.pollIntervalMs);
+  }
+
+  const error = new Error(`Nano 轮询超时（${formatDurationMs(timeoutMs)}）`);
+  error.details = `taskId=${taskId}, sceneIndex=${sceneIndex}, timeoutMs=${timeoutMs}`;
+  throw error;
+}
+
+async function getNanoSceneUrl({ sceneImage, sceneIndex, sceneUrlCache }) {
+  if (!sceneUrlCache.has(sceneIndex)) {
+    const extension = getFileExtensionFromDataUrl(sceneImage);
+    sceneUrlCache.set(
+      sceneIndex,
+      uploadNanoReferenceImage({
+        dataUrl: sceneImage,
+        filename: `scene-${sceneIndex}.${extension}`,
+        role: "scene",
+        sceneIndex,
+      }),
+    );
+  }
+
+  return sceneUrlCache.get(sceneIndex);
+}
+
+async function callNanoAPI({
+  apiKey,
+  sceneImage,
+  characterUrl,
+  prompt,
+  size,
+  sceneIndex,
+  timeoutMs,
+  sceneUrlCache,
+}) {
+  const sceneUrl = await getNanoSceneUrl({
+    sceneImage,
+    sceneIndex,
+    sceneUrlCache,
+  });
+  const imageUrls = [];
+
+  if (characterUrl) {
+    imageUrls.push(characterUrl);
+  }
+  imageUrls.push(sceneUrl);
+
+  const taskId = await createNanoTask({
+    apiKey,
+    prompt,
+    imageUrls,
+    resolution: size,
+    sceneIndex,
+  });
+
+  return pollNanoTask({
+    apiKey,
+    taskId,
+    resolution: size,
+    sceneIndex,
+    timeoutMs,
+  });
+}
+
+async function callProviderAPI({
+  provider,
+  model,
+  apiKey,
+  sceneImage,
+  characterImage,
+  characterUrl,
+  prompt,
+  size,
+  sceneIndex,
+  timeoutMs,
+  sceneUrlCache,
+}) {
+  if (provider === PROVIDERS.NANO) {
+    return callNanoAPI({
+      apiKey,
+      sceneImage,
+      characterUrl,
+      prompt,
+      size,
+      sceneIndex,
+      timeoutMs,
+      sceneUrlCache,
+    });
+  }
+
+  return callVolcengineAPI({
+    model,
+    apiKey,
+    sceneImage,
+    characterImage,
+    prompt,
+    size,
+    sceneIndex,
+    timeoutMs,
+  });
+}
+
 function summarizeResponsePayload(data) {
   if (!data || typeof data !== "object") {
     return "empty response";
@@ -720,6 +1018,7 @@ function summarizeResponsePayload(data) {
 DOM.generateBtn.addEventListener("click", async () => {
   // 获取配置
   const model = DOM.modelSelect.value;
+  const provider = getProviderForModel(model);
   const apiKey = DOM.apiKeyInput.value.trim();
   const size = DOM.sizeSelect.value;
   const prompt = DOM.promptInput.value.trim();
@@ -763,6 +1062,7 @@ DOM.generateBtn.addEventListener("click", async () => {
   updateStatus(`准备生成 ${sceneCount} 张图片...`, true);
   addLog("info", "开始新的生成任务", {
     runId: AppState.currentRunId,
+    provider,
     model,
     size,
     sceneCount,
@@ -779,13 +1079,30 @@ DOM.generateBtn.addEventListener("click", async () => {
     const failed = [];
     let completed = 0;
     const startedAt = Date.now();
+    const sceneUrlCache = new Map();
+    let nanoCharacterUrl = null;
 
-    // 分批处理，每批5张并发
-    const concurrency = 5;
-    addLog("info", "并发参数已锁定", {
-      concurrency,
-      timeoutMs: SINGLE_API_TIMEOUT,
+    const requestProfile = getRequestProfile({
+      provider,
+      hasCharacterImage: !!AppState.characterImage,
+      size,
     });
+    const { concurrency, timeoutMs } = requestProfile;
+    addLog("info", "并发参数已锁定", {
+      provider,
+      concurrency,
+      timeoutMs,
+    });
+
+    if (provider === PROVIDERS.NANO && AppState.characterImage) {
+      const extension = getFileExtensionFromDataUrl(AppState.characterImage);
+      nanoCharacterUrl = await uploadNanoReferenceImage({
+        dataUrl: AppState.characterImage,
+        filename: `character-reference.${extension}`,
+        role: "character",
+        sceneIndex: "shared",
+      });
+    }
 
     for (let i = 0; i < sceneCount; i += concurrency) {
       // 检查是否取消
@@ -826,22 +1143,28 @@ DOM.generateBtn.addEventListener("click", async () => {
           addLog("info", "准备发起图片生成请求", {
             sceneIndex: globalIndex + 1,
             ...buildRequestSummary({
+              provider,
               model,
               size,
               prompt: fullPrompt,
               imageCount: AppState.characterImage ? 2 : 1,
             }),
+            timeoutMs,
           });
 
           // 调用API（带超时）
-          const result = await callSingleAPI({
+          const result = await callProviderAPI({
+            provider,
             model,
             apiKey,
             sceneImage,
             characterImage: AppState.characterImage,
+            characterUrl: nanoCharacterUrl,
             prompt: fullPrompt,
             size,
             sceneIndex: globalIndex + 1,
+            timeoutMs,
+            sceneUrlCache,
           });
 
           completed++;
@@ -1004,7 +1327,7 @@ function updateProgress(completed, total) {
 /**
  * 调用单个API（带超时）
  */
-async function callSingleAPI({
+async function callVolcengineAPI({
   model,
   apiKey,
   sceneImage,
@@ -1012,9 +1335,11 @@ async function callSingleAPI({
   prompt,
   size,
   sceneIndex,
+  timeoutMs,
 }) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SINGLE_API_TIMEOUT);
+  const effectiveTimeoutMs = timeoutMs || REQUEST_PROFILE.volcengineDefault.timeoutMs;
+  const timeoutId = setTimeout(() => controller.abort(), effectiveTimeoutMs);
 
   try {
     // 构建请求体
@@ -1033,12 +1358,14 @@ async function callSingleAPI({
     if (images.length > 0) {
       requestBody.image = images.length === 1 ? images[0] : images;
     }
+    const requestSizeKb = estimateJsonSizeKb(requestBody);
 
     addLog("info", "请求已发送到图像生成接口", {
       sceneIndex,
       endpoint: "https://ark.cn-beijing.volces.com/api/v3/images/generations",
-      timeoutMs: SINGLE_API_TIMEOUT,
+      timeoutMs: effectiveTimeoutMs,
       imageCount: images.length,
+      requestSizeKb,
     });
 
     const response = await fetch(
@@ -1101,8 +1428,8 @@ async function callSingleAPI({
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === "AbortError") {
-      const timeoutError = new Error("生成超时（30秒）");
-      timeoutError.details = `sceneIndex=${sceneIndex}`;
+      const timeoutError = new Error(`生成超时（${formatDurationMs(effectiveTimeoutMs)}）`);
+      timeoutError.details = `sceneIndex=${sceneIndex}, timeoutMs=${effectiveTimeoutMs}`;
       throw timeoutError;
     }
     throw error;
