@@ -392,6 +392,51 @@ function fileToBase64(file) {
 }
 
 /**
+ * 压缩 base64 图片，确保不超过指定大小（默认 3MB）
+ * 通过缩小尺寸和降低质量来实现
+ */
+function compressBase64Image(dataUrl, maxSizeBytes = 3 * 1024 * 1024) {
+  return new Promise((resolve) => {
+    const currentSize = Math.ceil((dataUrl.length - dataUrl.indexOf(",") - 1) * 0.75);
+    if (currentSize <= maxSizeBytes) {
+      resolve(dataUrl);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      let { width, height } = img;
+      const maxDimension = 2048;
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let quality = 0.85;
+      let result = canvas.toDataURL("image/jpeg", quality);
+
+      while (Math.ceil((result.length - result.indexOf(",") - 1) * 0.75) > maxSizeBytes && quality > 0.3) {
+        quality -= 0.1;
+        result = canvas.toDataURL("image/jpeg", quality);
+      }
+
+      console.log(`图片压缩: ${(currentSize / 1024 / 1024).toFixed(1)}MB → ${(Math.ceil((result.length - result.indexOf(",") - 1) * 0.75) / 1024 / 1024).toFixed(1)}MB (quality=${quality.toFixed(1)})`);
+      resolve(result);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+/**
  * 下载图片（兼容跨域）
  */
 function downloadImage(url, filename) {
@@ -807,6 +852,9 @@ async function postJson(url, payload, options = {}) {
 }
 
 async function uploadNanoReferenceImage({ dataUrl, filename, role, sceneIndex }) {
+  // 上传前压缩图片，避免超过 Vercel 4.5MB 请求体限制
+  const compressedDataUrl = await compressBase64Image(dataUrl);
+
   addLog("info", "uploadStart", {
     provider: PROVIDERS.NANO,
     role,
@@ -815,7 +863,7 @@ async function uploadNanoReferenceImage({ dataUrl, filename, role, sceneIndex })
   });
 
   const data = await postJson(NANO_CONFIG.uploadEndpoint, {
-    dataUrl,
+    dataUrl: compressedDataUrl,
     filename,
   });
 
